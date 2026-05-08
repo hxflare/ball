@@ -9,10 +9,10 @@ fi
 BTOOLS="$(dirname "$0")/../btools.c"
 OUTDIR="$(dirname "$0")/../building/isoroot/initramfs/bin"
 echo "Cleaning old binaries in $DIR..."
-find "$DIR" -maxdepth 1 -type f ! -name "*.c" -delete
 for file in "${files[@]}"; do
     name="${file%.c}"
     echo "Compiling $file -> $name"
+    rm $name
     gcc -static -o "$name" "$file" "$BTOOLS" || { echo "Compilation failed: $file"; exit 1; }
 done
 echo "Wiping $OUTDIR."

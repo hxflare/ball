@@ -17,7 +17,7 @@ coreutils/mv
 coreutils/cp
 coreutils/bedit
 ball_old.c
-building/linux
+building/.linux
 building/isoroot/initramfs/bin/
 building/isoroot/boot/grub/romanesku.png
 building/isoroot/boot/initrd.img

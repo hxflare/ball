@@ -53,7 +53,7 @@ void cmove(char key) {
   if (config.crows > config.rows)
     config.crows = config.rows;
   if (config.ccols > config.cols)
-    config.crows = config.rows;
+    config.ccols = config.ccols;
   if (config.crows < 0)
     config.crows = 0;
   if (config.ccols < 0)

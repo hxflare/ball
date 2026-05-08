@@ -28,7 +28,7 @@ typedef enum exec_types {
   piped_out_of = 1,
   overwrite_file = 2,
   append_to_file = 3,
-  or = 4,
+  eor = 4,
   background = 5,
   and = 6
 } exec_types;
@@ -214,7 +214,7 @@ exec_batch *get_exec_order(char *raw) {
           order[index].type = and;
           break;
         case ':':
-          order[index].type = or;
+          order[index].type = eor;
           break;
         default:
           order[index].type = normal;
@@ -528,10 +528,7 @@ int main(int argc, char **argv) {
               "The ball shell configuration file.\n"
               "!PISS\n@%%u@%%h  %%p %%n#   \n"
               "!ALIAS\n@ls=l -cthi\n"
-              "!PATH\n@/bin\n@/usr/bin\n@/usr/local/bin\n@/sbin\n@/usr/sbin\n"
-              "$echo \"Welcome to ball-linux!!!!\"\n"
-              "$echo \"\e[40m \e[41m \e[42m \e[43m \e[44m \e[45m \e[46m \e[47m "
-              "\e[40m\"\n");
+              "!PATH\n@/bin\n@/usr/bin\n@/usr/local/bin\n@/sbin\n@/usr/sbin\n");
       fclose(rcfile);
 
       rcfile = fopen(rc_path, "r");
@@ -553,21 +550,22 @@ int main(int argc, char **argv) {
   }
 
   if (argc > 1) {
-      if (argv[1][0] == '-' && argv[1][1] == 'c') {
-          if (argc < 3) return 0;
+    if (argv[1][0] == '-' && argv[1][1] == 'c') {
+      if (argc < 3)
+        return 0;
 
-          char *arg = strdup("");
-          for (int i = 2; i < argc; i++) {
-              char *with_arg = concat(arg, argv[i]);
-              free(arg);
-              char *with_space = concat(with_arg, " ");
-              free(with_arg);
-              arg = with_space;
-          }
+      char *arg = strdup("");
+      for (int i = 2; i < argc; i++) {
+        char *with_arg = concat(arg, argv[i]);
+        free(arg);
+        char *with_space = concat(with_arg, " ");
+        free(with_arg);
+        arg = with_space;
+      }
 
-          execute('c', arg, conf);
-          free(arg);
-      } else {
+      execute('c', arg, conf);
+      free(arg);
+    } else {
       for (int i = 1; i < argc; i++) {
         execute('f', argv[i], conf);
       }

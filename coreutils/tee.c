@@ -2,7 +2,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include "../btools.h"
-int main(int argc,char **argv){\
+int main(int argc,char **argv){
     int quoted=0;
     if (argc<3){
         return 1;
