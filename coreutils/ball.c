@@ -477,6 +477,19 @@ void loop(shellConf config) {
       piss = formatPISS(config);
       cprint(piss);
       free(piss);
+    }else if(cur_c=='\x1b'){
+        char seq[4] = {0};
+        read(STDIN_FILENO, &seq[0], 1);
+        read(STDIN_FILENO, &seq[1], 1);
+        key_t key;
+        if (seq[0]=='['){
+            switch (seq[1]) {
+                case 'A': key=arrow_up;
+                case 'B': key=arrow_down;
+                case 'C': key=arrow_right;
+                case 'D': key=arrow_left;
+            }
+        }
     } else {
       if (index >= buf_size - 1) {
         buf_size *= 2;
