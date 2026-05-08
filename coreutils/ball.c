@@ -276,6 +276,7 @@ char *formatPISS(shellConf config) {
         if (homedir) {
           char *replaced = str_replace(cwd, homedir, "~");
           insert_str = replaced ? replaced : cwd;
+          free(replaced);
         } else {
           insert_str = cwd;
         }
@@ -477,19 +478,27 @@ void loop(shellConf config) {
       piss = formatPISS(config);
       cprint(piss);
       free(piss);
-    }else if(cur_c=='\x1b'){
-        char seq[4] = {0};
-        read(STDIN_FILENO, &seq[0], 1);
-        read(STDIN_FILENO, &seq[1], 1);
-        key_t key;
-        if (seq[0]=='['){
-            switch (seq[1]) {
-                case 'A': key=arrow_up;
-                case 'B': key=arrow_down;
-                case 'C': key=arrow_right;
-                case 'D': key=arrow_left;
-            }
+    } else if (cur_c == '\x1b') {
+      char seq[4] = {0};
+      read(STDIN_FILENO, &seq[0], 1);
+      read(STDIN_FILENO, &seq[1], 1);
+      kkey_t key;
+      if (seq[0] == '[') {
+        switch (seq[1]) {
+        case 'A':
+          key = arrow_up;
+          break;
+        case 'B':
+          key = arrow_down;
+          break;
+        case 'C':
+          key = arrow_right;
+          break;
+        case 'D':
+          key = arrow_left;
+          break;
         }
+      }
     } else {
       if (index >= buf_size - 1) {
         buf_size *= 2;
@@ -509,9 +518,11 @@ int main(int argc, char **argv) {
   shellConf conf;
   memset(&conf, 0, sizeof(shellConf));
 
-  rcfile = fopen(concat(getenv("HOME"), "/.ballrc"), "r");
+  char *rc_path = concat(getenv("HOME"), "/.ballrc");
+  rcfile = fopen(rc_path, "r");
+
   if (rcfile == NULL) {
-    rcfile = fopen(concat(getenv("HOME"), "/.ballrc"), "w");
+    rcfile = fopen(rc_path, "w");
     if (rcfile != NULL) {
       fprintf(rcfile,
               "The ball shell configuration file.\n"
@@ -522,15 +533,16 @@ int main(int argc, char **argv) {
               "$echo \"\e[40m \e[41m \e[42m \e[43m \e[44m \e[45m \e[46m \e[47m "
               "\e[40m\"\n");
       fclose(rcfile);
-      rcfile = fopen(concat(getenv("HOME"), "/.ballrc"), "r");
+
+      rcfile = fopen(rc_path, "r");
     }
   }
-
+  free(rc_path);
   if (rcfile != NULL) {
     if (argc > 1) {
       conf = getConf(rcfile, 0);
     } else {
-      conf = getConf(rcfile,1);
+      conf = getConf(rcfile, 1);
     }
     fclose(rcfile);
   } else {
@@ -541,33 +553,21 @@ int main(int argc, char **argv) {
   }
 
   if (argc > 1) {
-    if (argv[1][0] == '-' && argv[1][1] == 'c') {
-      char *arg = calloc(1, 1);
-      for (int i = 2; i < argc; i++) {
-        arg = concat(arg, argv[i]);
-      }
-      char *command = malloc(strlen(arg)+1);
-      int quoted = 0;
-      int c_index = 0;
-      for (int i = 0; i < strlen(arg); i++) {
-        if (arg[i] == '"') {
-          quoted = !quoted;
-        } else if (arg[i] != ' ' || quoted) {
-          if (arg[i] != ' ') {
-            command[c_index] = arg[i];
-            c_index++;
-          } else {
-            c_index++;
-            break;
+      if (argv[1][0] == '-' && argv[1][1] == 'c') {
+          if (argc < 3) return 0;
+
+          char *arg = strdup("");
+          for (int i = 2; i < argc; i++) {
+              char *with_arg = concat(arg, argv[i]);
+              free(arg);
+              char *with_space = concat(with_arg, " ");
+              free(with_arg);
+              arg = with_space;
           }
-        } else {
-          break;
-        }
-      }
-      command[c_index] = '\0';
-      execute('c', command, conf);
-      free(command);
-    } else {
+
+          execute('c', arg, conf);
+          free(arg);
+      } else {
       for (int i = 1; i < argc; i++) {
         execute('f', argv[i], conf);
       }

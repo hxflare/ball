@@ -15,6 +15,7 @@ coreutils/pwd
 coreutils/rm
 coreutils/mv
 coreutils/cp
+coreutils/bedit
 ball_old.c
 building/linux
 building/isoroot/initramfs/bin/
