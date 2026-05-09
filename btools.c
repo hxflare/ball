@@ -109,4 +109,32 @@ void cpstr_append(cstring *main, char *app, int len) {
   main->str = new;
   main->len += len;
 }
-void cstr_free(cstring *str) { free(str->str); }
+void cstr_free(cstring *str) {
+  free(str->str);
+  str->str = NULL;
+  str->len = 0;
+}
+void cstr_replace(int a, int b, cstring *rep, cstring *with) {
+    int removed = b - a + 1;
+    int shift = (with ? with->len : 0) - removed;
+    int new_len = rep->len + shift;
+
+    char *new_str = realloc(rep->str, new_len);
+    if (!new_str)
+        return;
+    // move to the right
+    memmove(new_str + a + (with ? with->len : 0),
+            new_str + b + 1,
+            rep->len - b - 1);
+    // insert the string
+    if (with)
+        memcpy(new_str + a, with->str, with->len);
+    rep->len = new_len;
+    rep->str = new_str;
+}
+void cchstr_append(cstring *main, char app){
+    char *new=realloc(main->str, main->len+1);
+    new[main->len]=app;
+    main->len++;
+    main->str=new;
+}

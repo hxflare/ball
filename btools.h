@@ -15,6 +15,7 @@ typedef struct cstring {
 void cstr_free(cstring *str);
 void cpstr_append(cstring *main, char *app, int len);
 void ccstr_append(cstring *main, cstring *app);
+void cchstr_append(cstring *main, char app);
 void gcpos(int *rows, int *cols);
 void gwinsize(int *rows, int *cols);
 void cprint(const char *string);
