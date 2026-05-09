@@ -1,0 +1,7 @@
+!type
+@command
+!after
+!before
+
+!functional
+/bin/clear

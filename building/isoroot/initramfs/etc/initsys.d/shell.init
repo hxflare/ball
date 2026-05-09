@@ -1,0 +1,8 @@
+shell init
+!after
+@clear.init
+!before
+!type
+@command
+!functional
+ball
