@@ -36,7 +36,7 @@ struct editor_config {
   char mode;
   struct tab *tabs;
   int tabs_n;
-  struct static_editor_config staticc;
+  struct static_editor_config staticconf;
   struct termios orig_termios;
 };
 struct editor_config config;
@@ -51,7 +51,8 @@ void enableRawMode() {
   tcgetattr(STDIN_FILENO, &(config.orig_termios));
   atexit(disableRawMode);
   struct termios raw = config.orig_termios;
-  raw.c_iflag &= ~(ICRNL | IXON);
+  raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
+  raw.c_cflag |= (CS8);
   raw.c_oflag &= ~(OPOST);
   raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
   raw.c_cc[VMIN] = 0;
@@ -73,14 +74,26 @@ void cmove(char key) {
     config.crows++;
     break;
   }
-  if (config.crows > config.row_dbound - 1)
+  if (config.crows > config.row_dbound - 1) {
     config.crows = config.row_dbound - 1;
-  if (config.ccols > config.col_rbound - 1)
+    config.start++;
+  }
+  if (config.ccols > config.col_rbound - 1) {
     config.ccols = config.col_rbound - 1;
-  if (config.crows < config.row_ubound)
+  }
+  if (config.crows < config.row_ubound) {
     config.crows = config.row_ubound;
-  if (config.ccols < config.col_lbound)
+    config.start--;
+  }
+  if (config.ccols < config.col_lbound) {
     config.ccols = config.col_lbound;
+  }
+  if (config.start < 0) {
+    config.start = 0;
+  }
+  if (config.start > config.tabs[config.c_tab].rows - config.rows) {
+    config.start = config.tabs[config.c_tab].rows - config.rows;
+  }
 }
 void process() {
   char c = 0;
@@ -107,13 +120,26 @@ void process() {
 void draw_lines(cstring *ab, int *rows_left) {
   int bound = *rows_left - 1;
   cpstr_append(ab, "\r\n", 2);
+  int max_idxlen = intlen(config.tabs[config.c_tab].rows);
   for (int y = 0; y < bound; y++) {
-    cstring *c_line = &(config.tabs[config.c_tab].lines[y]);
-    cpstr_append(ab, " ~ ", 3);
+    cstring *c_line = &(config.tabs[config.c_tab].lines[y + config.start]);
+    int t_offset = 0;
+    cstring str_idx = CSTRING_INIT;
+    int_to_cstr(y + config.start, &str_idx);
+    t_offset += str_idx.len + 1;
+    ccstr_append(ab, &str_idx);
+    for (int i = 0; i < max_idxlen - intlen(y + config.start); i++) {
+      cchstr_append(ab, ' ');
+    }
+    cchstr_append(ab, ' ');
+    cchstr_append(ab, config.staticconf.line_char);
+    cchstr_append(ab, ' ');
+    t_offset += 3;
+    config.col_lbound = t_offset;
     cpstr_append(ab, "\x1b[K", 3);
     if (y < config.tabs[config.c_tab].rows) {
       ccstr_append(ab, c_line);
-      (*rows_left) -= (c_line->len + 3) / config.rows;
+      (*rows_left) -= (c_line->len + t_offset) / config.rows;
     }
     if (y < bound - 1) {
       cpstr_append(ab, "\r\n", 2);
@@ -185,6 +211,7 @@ int opentab(char *filename) {
 // init
 void initconf() {
   gwinsize(&(config.rows), &(config.cols));
+  config.start = 0;
   config.col_lbound = 3;
   config.col_rbound = config.cols;
   config.row_ubound = 0;
@@ -192,6 +219,7 @@ void initconf() {
   config.crows = config.row_ubound;
   config.ccols = config.col_lbound;
   config.tabs_n = 0;
+  config.staticconf.line_char = '~';
 }
 int main(int argc, char **argv) {
   enableRawMode();
