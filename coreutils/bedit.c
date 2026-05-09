@@ -9,8 +9,8 @@
 #include <unistd.h>
 
 // defines
-#define CTRL_KEY(k) ((k) & 0x1f)
-#define UNCTRL_KEY(k) ((k) | 0x60)
+#define CK(k) ((k) & 0x1f)
+#define UCK(k) ((k) | 0x60)
 // data structures
 struct tab {
   cstring filename;
@@ -44,7 +44,7 @@ struct editor_config config;
 // functionality
 void disableRawMode() {
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &(config.orig_termios));
-  cprint("\x1b[H");
+  cprint("\x1b[H\x1b[K");
   cprint("exited\n");
 }
 void enableRawMode() {
@@ -87,15 +87,15 @@ void process() {
   if (read(STDIN_FILENO, &c, 1) != 1)
     return;
   switch (c) {
-  case CTRL_KEY('x'):
+  case CK('x'):
     exit(0);
-  case CTRL_KEY('w'):
-  case CTRL_KEY('s'):
-  case CTRL_KEY('a'):
-  case CTRL_KEY('d'):
-    cmove(UNCTRL_KEY(c));
+  case CK('w'):
+  case CK('s'):
+  case CK('a'):
+  case CK('d'):
+    cmove(UCK(c));
     break;
-  case CTRL_KEY('i'):
+  case CK('i'):
     if (config.c_tab < config.tabs_n - 1) {
       config.c_tab++;
     } else {
@@ -132,6 +132,7 @@ void draw_top(cstring *ab, int *rows_left) {
     ccstr_append(ab, &(config.tabs[i].filename));
     accumulated_len += 8 + config.tabs[i].filename.len;
   }
+  cpstr_append(ab, "\x1b[K", 3);
   (*rows_left) -= accumulated_len / config.cols;
   config.row_ubound = config.rows - *rows_left + 1;
 }
@@ -155,20 +156,16 @@ void refresh() {
   cstr_free(&ab);
 }
 void read_lines(cstring filename, struct tab *out) {
-
-  // open the edited file
   int fd = open(filename.str, O_CREAT | O_RDWR, 0644);
   char c;
   int line_idx = 0;
-  // allocate tab elements
   out->lines = realloc(out->lines, sizeof(cstring) * (line_idx + 1));
   out->lines[line_idx] = (cstring)CSTRING_INIT;
-  // read loop
   while (read(fd, &c, 1) == 1) {
     if (c == '\n') {
       line_idx += 1;
-      out->lines[line_idx] = (cstring)CSTRING_INIT;
       out->lines = realloc(out->lines, sizeof(cstring) * (line_idx + 1));
+      out->lines[line_idx] = (cstring)CSTRING_INIT;
       continue;
     }
     cchstr_append(&(out->lines[line_idx]), c);

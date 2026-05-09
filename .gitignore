@@ -37,3 +37,4 @@ coreutils/pwd
 coreutils/touch
 coreutils/tee
 coreutils/tree
+coreutils/test
