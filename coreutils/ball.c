@@ -105,11 +105,13 @@ char **extract_args(char *command, shellConf config, int *argc) {
     while (args[i] != NULL) {
       int j = 0;
       while (config.aliases[j][0] != '\0') {
-        char *replaced =
-            str_replace(args[i], config.aliases[j], config.meanings[j]);
-        if (replaced != NULL) {
-          free(args[i]);
-          args[i] = replaced;
+        if (strcmp(config.aliases[j], args[i]) == 0) {
+          char *replaced =
+              str_replace(args[i], config.aliases[j], config.meanings[j]);
+          if (replaced != NULL) {
+            free(args[i]);
+            args[i] = replaced;
+          }
         }
         j++;
       }
@@ -276,7 +278,6 @@ char *formatPISS(shellConf config) {
         if (homedir) {
           char *replaced = str_replace(cwd, homedir, "~");
           insert_str = replaced ? replaced : cwd;
-          free(replaced);
         } else {
           insert_str = cwd;
         }
