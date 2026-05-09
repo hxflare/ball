@@ -115,26 +115,52 @@ void cstr_free(cstring *str) {
   str->len = 0;
 }
 void cstr_replace(int a, int b, cstring *rep, cstring *with) {
-    int removed = b - a + 1;
-    int shift = (with ? with->len : 0) - removed;
-    int new_len = rep->len + shift;
+  int removed = b - a + 1;
+  int shift = (with ? with->len : 0) - removed;
+  int new_len = rep->len + shift;
 
-    char *new_str = realloc(rep->str, new_len);
-    if (!new_str)
-        return;
-    // move to the right
-    memmove(new_str + a + (with ? with->len : 0),
-            new_str + b + 1,
-            rep->len - b - 1);
-    // insert the string
-    if (with)
-        memcpy(new_str + a, with->str, with->len);
-    rep->len = new_len;
-    rep->str = new_str;
+  char *new_str = realloc(rep->str, new_len);
+  if (!new_str)
+    return;
+  // move to the right
+  memmove(new_str + a + (with ? with->len : 0), new_str + b + 1,
+          rep->len - b - 1);
+  // insert the string
+  if (with)
+    memcpy(new_str + a, with->str, with->len);
+  rep->len = new_len;
+  rep->str = new_str;
 }
-void cchstr_append(cstring *main, char app){
-    char *new=realloc(main->str, main->len+1);
-    new[main->len]=app;
-    main->len++;
-    main->str=new;
+void cchstr_append(cstring *main, char app) {
+  char *new = realloc(main->str, main->len + 1);
+  new[main->len] = app;
+  main->len++;
+  main->str = new;
+}
+void int_to_cstr(int n, cstring *str) {
+  if (n == 0) {
+    cchstr_append(str, '0');
+    return;
+  }
+  if (n < 0) {
+    cchstr_append(str, '-');
+    n = -n;
+  }
+  int start = str->len;
+  while (n > 0) {
+    cchstr_append(str, n % 10 + '0');
+    n /= 10;
+  }
+  for (int j = start, k = str->len - 1; j < k; j++, k--) {
+    char temp = str->str[j];
+    str->str[j] = str->str[k];
+    str->str[k] = temp;
+  }
+}
+int intlen(int n) {
+  if (n == 0) return 1;
+  if (n < 0) n = -n;
+  int len = 0;
+  while (n > 0) { len++; n /= 10; }
+  return len;
 }

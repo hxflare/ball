@@ -23,4 +23,6 @@ char *str_replace(char *orig, char *rep, char *with);
 void print_strlist(const char **array);
 char *concat(const char *s1, const char *s2);
 int str_isdigit(const char *str);
+void int_to_cstr(int n, cstring *str);
+int intlen(int n);
 #endif
