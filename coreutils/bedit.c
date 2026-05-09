@@ -1,5 +1,6 @@
 #include "../btools.h"
 #include <ctype.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,20 +10,42 @@
 
 // defines
 #define CTRL_KEY(k) ((k) & 0x1f)
-#define ABUF_INIT {NULL, 0}
+#define UNCTRL_KEY(k) ((k) | 0x60)
 // data structures
-struct editorConfig {
+struct tab {
+  cstring filename;
+  int rows;
+  cstring *lines;
+  int *dirty;
+  int dirty_n;
+};
+struct static_editor_config {
+  char line_char;
+};
+struct editor_config {
   int rows;
   int cols;
   int crows;
   int ccols;
+  int row_ubound;
+  int row_dbound;
+  int col_lbound;
+  int col_rbound;
+  int start;
+  int c_tab;
+  char mode;
+  struct tab *tabs;
+  int tabs_n;
+  struct static_editor_config staticc;
   struct termios orig_termios;
 };
-struct editorConfig config;
+struct editor_config config;
 
 // functionality
 void disableRawMode() {
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &(config.orig_termios));
+  cprint("\x1b[H");
+  cprint("exited\n");
 }
 void enableRawMode() {
   tcgetattr(STDIN_FILENO, &(config.orig_termios));
@@ -50,14 +73,14 @@ void cmove(char key) {
     config.crows++;
     break;
   }
-  if (config.crows > config.rows)
-    config.crows = config.rows;
-  if (config.ccols > config.cols)
-    config.ccols = config.ccols;
-  if (config.crows < 0)
-    config.crows = 0;
-  if (config.ccols < 0)
-    config.ccols = 0;
+  if (config.crows > config.row_dbound - 1)
+    config.crows = config.row_dbound - 1;
+  if (config.ccols > config.col_rbound - 1)
+    config.ccols = config.col_rbound - 1;
+  if (config.crows < config.row_ubound)
+    config.crows = config.row_ubound;
+  if (config.ccols < config.col_lbound)
+    config.ccols = config.col_lbound;
 }
 void process() {
   char c = 0;
@@ -65,48 +88,122 @@ void process() {
     return;
   switch (c) {
   case CTRL_KEY('x'):
-    cprint("Exitins");
     exit(0);
-  case 'w':
-  case 's':
-  case 'a':
-  case 'd':
-    cmove(c);
+  case CTRL_KEY('w'):
+  case CTRL_KEY('s'):
+  case CTRL_KEY('a'):
+  case CTRL_KEY('d'):
+    cmove(UNCTRL_KEY(c));
+    break;
+  case CTRL_KEY('i'):
+    if (config.c_tab < config.tabs_n - 1) {
+      config.c_tab++;
+    } else {
+      config.c_tab = 0;
+    }
     break;
   }
 }
-void draw_tildes(cstring *ab) {
-  for (int y = 0; y < config.rows; y++) {
-    cpstr_append(ab, "~", 1);
+void draw_lines(cstring *ab, int *rows_left) {
+  int bound = *rows_left - 1;
+  cpstr_append(ab, "\r\n", 2);
+  for (int y = 0; y < bound; y++) {
+    cstring *c_line = &(config.tabs[config.c_tab].lines[y]);
+    cpstr_append(ab, " ~ ", 3);
     cpstr_append(ab, "\x1b[K", 3);
-    if (y < config.rows - 1) {
+    if (y < config.tabs[config.c_tab].rows) {
+      ccstr_append(ab, c_line);
+      (*rows_left) -= (c_line->len + 3) / config.rows;
+    }
+    if (y < bound - 1) {
       cpstr_append(ab, "\r\n", 2);
+      (*rows_left)--;
     }
   }
 }
+void draw_top(cstring *ab, int *rows_left) {
+  int accumulated_len = 0;
+  for (int i = 0; i < config.tabs_n; i++) {
+    if (i == config.c_tab) {
+      cpstr_append(ab, " -->", 4);
+    } else {
+      cpstr_append(ab, "    ", 4);
+    }
+    ccstr_append(ab, &(config.tabs[i].filename));
+    accumulated_len += 8 + config.tabs[i].filename.len;
+  }
+  (*rows_left) -= accumulated_len / config.cols;
+  config.row_ubound = config.rows - *rows_left + 1;
+}
 void refresh() {
-  cstring ab = ABUF_INIT;
+  config.col_rbound = config.cols;
+  config.row_dbound = config.rows;
+
+  int left = config.rows;
+  cstring ab = CSTRING_INIT;
   cpstr_append(&ab, "\x1b[?25l", 6);
   cpstr_append(&ab, "\x1b[H", 3);
-  draw_tildes(&ab);
+  draw_top(&ab, &left);
+  draw_lines(&ab, &left);
   char posbuf[32];
   snprintf(posbuf, sizeof(posbuf), "\x1b[%d;%dH", config.crows + 1,
            config.ccols + 1);
   cpstr_append(&ab, posbuf, strlen(posbuf));
   cpstr_append(&ab, "\x1b[?25h", 6);
   write(STDOUT_FILENO, ab.str, ab.len);
+  cmove('n');
   cstr_free(&ab);
+}
+void read_lines(cstring filename, struct tab *out) {
+
+  // open the edited file
+  int fd = open(filename.str, O_CREAT | O_RDWR, 0644);
+  char c;
+  int line_idx = 0;
+  // allocate tab elements
+  out->lines = realloc(out->lines, sizeof(cstring) * (line_idx + 1));
+  out->lines[line_idx] = (cstring)CSTRING_INIT;
+  // read loop
+  while (read(fd, &c, 1) == 1) {
+    if (c == '\n') {
+      line_idx += 1;
+      out->lines[line_idx] = (cstring)CSTRING_INIT;
+      out->lines = realloc(out->lines, sizeof(cstring) * (line_idx + 1));
+      continue;
+    }
+    cchstr_append(&(out->lines[line_idx]), c);
+  }
+  out->rows = line_idx + 1;
+  close(fd);
+}
+int opentab(char *filename) {
+  config.tabs_n += 1;
+  config.tabs = realloc(config.tabs, sizeof(struct tab) * config.tabs_n);
+  struct tab *c_tab = &(config.tabs[config.tabs_n - 1]);
+  (c_tab->filename) = (cstring)CSTRING_INIT;
+  cpstr_append(&(c_tab->filename), filename, strlen(filename));
+  read_lines(c_tab->filename, c_tab);
+  return 0;
 }
 // init
 void initconf() {
   gwinsize(&(config.rows), &(config.cols));
-  config.crows = 0;
-  config.ccols = 0;
+  config.col_lbound = 3;
+  config.col_rbound = config.cols;
+  config.row_ubound = 0;
+  config.row_dbound = config.rows;
+  config.crows = config.row_ubound;
+  config.ccols = config.col_lbound;
+  config.tabs_n = 0;
 }
-int main() {
+int main(int argc, char **argv) {
   enableRawMode();
   initconf();
+  for (int i = 1; i < argc; i++) {
+    opentab(argv[i]);
+  }
   while (1) {
+    gwinsize(&(config.rows), &(config.cols));
     refresh();
     process();
   }
