@@ -13,6 +13,7 @@
 #define UCK(k) ((k) | 0x60)
 // data structures
 struct tab {
+  int start;
   cstring filename;
   int rows;
   cstring *lines;
@@ -21,8 +22,9 @@ struct tab {
 };
 struct static_editor_config {
   char line_char;
+  int wordwrap;
 };
-struct editor_config {
+struct runtime_data {
   int rows;
   int cols;
   int crows;
@@ -31,7 +33,6 @@ struct editor_config {
   int row_dbound;
   int col_lbound;
   int col_rbound;
-  int start;
   int c_tab;
   char mode;
   struct tab *tabs;
@@ -39,18 +40,18 @@ struct editor_config {
   struct static_editor_config staticconf;
   struct termios orig_termios;
 };
-struct editor_config config;
+struct runtime_data run_data;
 
 // functionality
 void disableRawMode() {
-  tcsetattr(STDIN_FILENO, TCSAFLUSH, &(config.orig_termios));
+  tcsetattr(STDIN_FILENO, TCSAFLUSH, &(run_data.orig_termios));
   cprint("\x1b[H\x1b[K");
+  cprint("\e[1;1H\e[2J");
   cprint("exited\n");
 }
 void enableRawMode() {
-  tcgetattr(STDIN_FILENO, &(config.orig_termios));
   atexit(disableRawMode);
-  struct termios raw = config.orig_termios;
+  struct termios raw = run_data.orig_termios;
   raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
   raw.c_cflag |= (CS8);
   raw.c_oflag &= ~(OPOST);
@@ -62,38 +63,39 @@ void enableRawMode() {
 void cmove(char key) {
   switch (key) {
   case 'a':
-    config.ccols--;
+    run_data.ccols--;
     break;
   case 'w':
-    config.crows--;
+    run_data.crows--;
     break;
   case 'd':
-    config.ccols++;
+    run_data.ccols++;
     break;
   case 's':
-    config.crows++;
+    run_data.crows++;
     break;
   }
-  if (config.crows > config.row_dbound - 1) {
-    config.crows = config.row_dbound - 1;
-    config.start++;
+  if (run_data.crows > run_data.row_dbound - 1) {
+    run_data.crows = run_data.row_dbound - 1;
+    run_data.tabs[run_data.c_tab].start++;
   }
-  if (config.ccols > config.col_rbound - 1) {
-    config.ccols = config.col_rbound - 1;
+  if (run_data.ccols > run_data.col_rbound - 1) {
+    run_data.ccols = run_data.col_rbound - 1;
   }
-  if (config.crows < config.row_ubound) {
-    config.crows = config.row_ubound;
-    config.start--;
+  if (run_data.crows < run_data.row_ubound) {
+    run_data.crows = run_data.row_ubound;
+    run_data.tabs[run_data.c_tab].start--;
   }
-  if (config.ccols < config.col_lbound) {
-    config.ccols = config.col_lbound;
+  if (run_data.ccols < run_data.col_lbound) {
+    run_data.ccols = run_data.col_lbound;
   }
-  if (config.start < 0) {
-    config.start = 0;
-  }
-  if (config.start > config.tabs[config.c_tab].rows - config.rows) {
-    config.start = config.tabs[config.c_tab].rows - config.rows;
-  }
+  if (run_data.tabs[run_data.c_tab].start < 0)
+    run_data.tabs[run_data.c_tab].start = 0;
+  int max_start = run_data.tabs[run_data.c_tab].rows - run_data.rows;
+  if (max_start < 0)
+    max_start = 0;
+  if (run_data.tabs[run_data.c_tab].start > max_start)
+    run_data.tabs[run_data.c_tab].start = max_start;
 }
 void process() {
   char c = 0;
@@ -101,6 +103,7 @@ void process() {
     return;
   switch (c) {
   case CK('x'):
+    disableRawMode();
     exit(0);
   case CK('w'):
   case CK('s'):
@@ -109,77 +112,141 @@ void process() {
     cmove(UCK(c));
     break;
   case CK('i'):
-    if (config.c_tab < config.tabs_n - 1) {
-      config.c_tab++;
+    if (run_data.c_tab < run_data.tabs_n - 1) {
+      run_data.c_tab++;
     } else {
-      config.c_tab = 0;
+      run_data.c_tab = 0;
     }
     break;
   }
 }
-void draw_lines(cstring *ab, int *rows_left) {
-  int bound = *rows_left - 1;
-  cpstr_append(ab, "\r\n", 2);
-  int max_idxlen = intlen(config.tabs[config.c_tab].rows);
-  for (int y = 0; y < bound; y++) {
-    cstring *c_line = &(config.tabs[config.c_tab].lines[y + config.start]);
-    int t_offset = 0;
-    cstring str_idx = CSTRING_INIT;
-    int_to_cstr(y + config.start, &str_idx);
-    t_offset += str_idx.len + 1;
-    ccstr_append(ab, &str_idx);
-    for (int i = 0; i < max_idxlen - intlen(y + config.start); i++) {
-      cchstr_append(ab, ' ');
-    }
-    cchstr_append(ab, ' ');
-    cchstr_append(ab, config.staticconf.line_char);
-    cchstr_append(ab, ' ');
-    t_offset += 3;
-    config.col_lbound = t_offset;
-    cpstr_append(ab, "\x1b[K", 3);
-    if (y < config.tabs[config.c_tab].rows) {
-      ccstr_append(ab, c_line);
-      (*rows_left) -= (c_line->len + t_offset) / config.rows;
-    }
-    if (y < bound - 1) {
-      cpstr_append(ab, "\r\n", 2);
+void draw_lines(cstring *ab, int *rows_left, int *row) {
+  int max_idxlen = intlen(run_data.tabs[run_data.c_tab].rows);
+  struct tab *ctab = &(run_data.tabs[run_data.c_tab]);
+  for (int lineidx = ctab->start; lineidx < ctab->rows && *rows_left > 0;
+       lineidx++) {
+    cstring full = CSTRING_INIT;
+    cstring idxstr = CSTRING_INIT;
+    int_to_cstr(lineidx, &idxstr);
+    ccstr_append(&full, &idxstr);
+    cchstr_append(&full, ' ');
+    cchstr_append(&full, run_data.staticconf.line_char);
+    cchstr_append(&full, ' ');
+    ccstr_append(&full, &(ctab->lines[lineidx]));
+    cstr_free(&idxstr);
+    if (full.len > (unsigned)run_data.cols) {
+      int div = full.len / run_data.cols;
+      for (int cd = 0; cd < div && *rows_left > 0; cd++) {
+        cstring frac = CSTRING_INIT;
+        getrange(&full, run_data.cols, cd * run_data.cols, &frac);
+        ccstr_append(&(ab[*row]), &frac);
+        cstr_free(&frac);
+        (*rows_left)--;
+        (*row)++;
+      }
+      int remainder = full.len % run_data.cols;
+      if (remainder > 0 && *rows_left > 0) {
+        cstring frac = CSTRING_INIT;
+        getrange(&full, remainder, div * run_data.cols, &frac);
+        ccstr_append(&(ab[*row]), &frac);
+        cstr_free(&frac);
+        (*rows_left)--;
+        (*row)++;
+      }
+    } else {
+      ccstr_append(&(ab[*row]), &full);
       (*rows_left)--;
+      (*row)++;
     }
+    cstr_free(&full);
   }
 }
-void draw_top(cstring *ab, int *rows_left) {
-  int accumulated_len = 0;
-  for (int i = 0; i < config.tabs_n; i++) {
-    if (i == config.c_tab) {
-      cpstr_append(ab, " -->", 4);
+void draw_top(cstring *ab, int *rows_left, int *row) {
+  cstring full = CSTRING_INIT;
+  for (int i = 0; i < run_data.tabs_n; i++) {
+    if (i == run_data.c_tab) {
+      cpstr_append(&full, "-->", 3);
     } else {
-      cpstr_append(ab, "    ", 4);
+      cpstr_append(&full, "   ", 3);
     }
-    ccstr_append(ab, &(config.tabs[i].filename));
-    accumulated_len += 8 + config.tabs[i].filename.len;
+    ccstr_append(&full, &(run_data.tabs[i].filename));
+    cpstr_append(&full, "   ", 3);
   }
-  cpstr_append(ab, "\x1b[K", 3);
-  (*rows_left) -= accumulated_len / config.cols;
-  config.row_ubound = config.rows - *rows_left + 1;
+  if (full.len > (unsigned)run_data.cols) {
+    int div = full.len / run_data.cols;
+    for (int cd = 0; cd < div && *rows_left > 0; cd++) {
+      cstring frac = CSTRING_INIT;
+      getrange(&full, run_data.cols, cd * run_data.cols, &frac);
+      ccstr_append(&(ab[*row]), &frac);
+      cstr_free(&frac);
+      (*rows_left)--;
+      (*row)++;
+    }
+    int remainder = full.len % run_data.cols;
+    if (remainder > 0 && *rows_left > 0) {
+      cstring frac = CSTRING_INIT;
+      getrange(&full, remainder, div * run_data.cols, &frac);
+      ccstr_append(&(ab[*row]), &frac);
+      cstr_free(&frac);
+      (*rows_left)--;
+      (*row)++;
+    }
+  } else {
+    if (*rows_left > 0) {
+      ccstr_append(&(ab[*row]), &full);
+      (*rows_left)--;
+      (*row)++;
+    }
+  }
+  cstr_free(&full);
+  run_data.row_ubound = *row;
+}
+void merge_lines(cstring *ab, cstring *lines) {
+  for (int i = 0; i < run_data.rows; i++) {
+    ccstr_append(ab, &(lines[i]));
+    if (i != run_data.rows - 1) {
+      cpstr_append(ab, "\r\n", 2);
+      cpstr_append(ab, "\x1b[K", 3);
+    }
+  }
 }
 void refresh() {
-  config.col_rbound = config.cols;
-  config.row_dbound = config.rows;
+  if (run_data.tabs_n == 0)
+    return;
+  run_data.col_rbound = run_data.cols;
+  if (run_data.tabs[run_data.c_tab].rows < run_data.rows) {
+    run_data.row_dbound = run_data.tabs[run_data.c_tab].rows + 1;
+  } else {
+    run_data.row_dbound = run_data.rows;
+  }
+  int max_idxlen = intlen(run_data.tabs[run_data.c_tab].rows);
+  run_data.col_lbound = 3 + max_idxlen;
 
-  int left = config.rows;
+  int left = run_data.rows;
   cstring ab = CSTRING_INIT;
+  cstring *lines_b = malloc(sizeof(cstring) * run_data.rows);
+  int row = 0;
+  for (int i = 0; i < run_data.rows; i++) {
+    lines_b[i] = (cstring)CSTRING_INIT;
+  }
   cpstr_append(&ab, "\x1b[?25l", 6);
   cpstr_append(&ab, "\x1b[H", 3);
-  draw_top(&ab, &left);
-  draw_lines(&ab, &left);
+  draw_top(lines_b, &left, &row);
+  draw_lines(lines_b, &left, &row);
+  merge_lines(&ab, lines_b);
+
   char posbuf[32];
-  snprintf(posbuf, sizeof(posbuf), "\x1b[%d;%dH", config.crows + 1,
-           config.ccols + 1);
+  snprintf(posbuf, sizeof(posbuf), "\x1b[%d;%dH", run_data.crows + 1,
+           run_data.ccols + 1);
   cpstr_append(&ab, posbuf, strlen(posbuf));
   cpstr_append(&ab, "\x1b[?25h", 6);
   write(STDOUT_FILENO, ab.str, ab.len);
   cmove('n');
   cstr_free(&ab);
+  for (int i = 0; i < run_data.rows; i++) {
+    cstr_free(&(lines_b[i]));
+  }
+  free(lines_b);
 }
 void read_lines(cstring filename, struct tab *out) {
   int fd = open(filename.str, O_CREAT | O_RDWR, 0644);
@@ -200,9 +267,10 @@ void read_lines(cstring filename, struct tab *out) {
   close(fd);
 }
 int opentab(char *filename) {
-  config.tabs_n += 1;
-  config.tabs = realloc(config.tabs, sizeof(struct tab) * config.tabs_n);
-  struct tab *c_tab = &(config.tabs[config.tabs_n - 1]);
+  run_data.tabs_n += 1;
+  run_data.tabs = realloc(run_data.tabs, sizeof(struct tab) * run_data.tabs_n);
+  struct tab *c_tab = &(run_data.tabs[run_data.tabs_n - 1]);
+  memset(c_tab, 0, sizeof(struct tab));
   (c_tab->filename) = (cstring)CSTRING_INIT;
   cpstr_append(&(c_tab->filename), filename, strlen(filename));
   read_lines(c_tab->filename, c_tab);
@@ -210,25 +278,27 @@ int opentab(char *filename) {
 }
 // init
 void initconf() {
-  gwinsize(&(config.rows), &(config.cols));
-  config.start = 0;
-  config.col_lbound = 3;
-  config.col_rbound = config.cols;
-  config.row_ubound = 0;
-  config.row_dbound = config.rows;
-  config.crows = config.row_ubound;
-  config.ccols = config.col_lbound;
-  config.tabs_n = 0;
-  config.staticconf.line_char = '~';
+  gwinsize(&(run_data.rows), &(run_data.cols));
+  run_data.col_lbound = 3;
+  run_data.col_rbound = run_data.cols;
+  run_data.row_ubound = 0;
+  run_data.row_dbound = run_data.rows;
+  run_data.crows = run_data.row_ubound;
+  run_data.ccols = run_data.col_lbound;
+  run_data.tabs_n = 0;
+  run_data.staticconf.line_char = '~';
+  run_data.staticconf.wordwrap = 1;
 }
 int main(int argc, char **argv) {
+  tcgetattr(STDIN_FILENO, &(run_data.orig_termios));
+  cprint("\e[1;1H\e[2J");
   enableRawMode();
   initconf();
   for (int i = 1; i < argc; i++) {
     opentab(argv[i]);
   }
   while (1) {
-    gwinsize(&(config.rows), &(config.cols));
+    gwinsize(&(run_data.rows), &(run_data.cols));
     refresh();
     process();
   }

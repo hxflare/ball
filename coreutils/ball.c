@@ -14,7 +14,6 @@ struct termios orig_termios;
 void disableRawMode() { tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios); }
 
 void enable_term_rawmode() {
-  tcgetattr(STDIN_FILENO, &orig_termios);
   atexit(disableRawMode);
   struct termios raw = orig_termios;
   raw.c_lflag &= ~(ECHO | ICANON | ISIG);
@@ -349,6 +348,7 @@ int execute(char mode, char *execd, shellConf config) {
       pid_t forked = fork();
       int status;
       if (forked == 0) {
+        disableRawMode();
         if (strchr(args[0], '/')) {
           execve(args[0], args, environ);
           exit(1);
@@ -369,6 +369,8 @@ int execute(char mode, char *execd, shellConf config) {
         if (waitpid(forked, &status, 0) == -1) {
           cprint("waitpid error\n");
         }
+        disableRawMode();
+        enable_term_rawmode();
       }
       i++;
     }
@@ -515,6 +517,7 @@ void loop(shellConf config) {
 }
 
 int main(int argc, char **argv) {
+  tcgetattr(STDIN_FILENO, &orig_termios);
   FILE *rcfile;
   shellConf conf;
   memset(&conf, 0, sizeof(shellConf));

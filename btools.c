@@ -31,6 +31,7 @@ void gwinsize(int *rows, int *cols) {
   *cols = ws.ws_col;
   *rows = ws.ws_row;
 }
+
 char *str_replace(char *orig, char *rep, char *with) {
   char *result;
   char *ins;
@@ -123,13 +124,16 @@ void cstr_replace(int a, int b, cstring *rep, cstring *with) {
   if (!new_str)
     return;
   // move to the right
-  memmove(new_str + a + (with ? with->len : 0), new_str + b + 1,
-          rep->len - b - 1);
-  // insert the string
-  if (with)
-    memcpy(new_str + a, with->str, with->len);
-  rep->len = new_len;
-  rep->str = new_str;
+  if (b + 1 < (int)rep->len) {
+    memmove(new_str + a + (with ? with->len : 0), new_str + b + 1,
+            rep->len - b - 1);
+
+    // insert the string
+    if (with)
+      memcpy(new_str + a, with->str, with->len);
+    rep->len = new_len;
+    rep->str = new_str;
+  }
 }
 void cchstr_append(cstring *main, char app) {
   char *new = realloc(main->str, main->len + 1);
@@ -158,9 +162,22 @@ void int_to_cstr(int n, cstring *str) {
   }
 }
 int intlen(int n) {
-  if (n == 0) return 1;
-  if (n < 0) n = -n;
+  if (n == 0)
+    return 1;
+  if (n < 0)
+    n = -n;
   int len = 0;
-  while (n > 0) { len++; n /= 10; }
+  while (n > 0) {
+    len++;
+    n /= 10;
+  }
   return len;
+}
+int getrange(cstring *str, int range, int start,cstring *ret) {
+    if (str->len < start+range)
+      return 0;
+    char *new = calloc(1, range);
+    memcpy(new, str->str+start, range);
+    *ret=(cstring){new,range};
+    return 1;
 }

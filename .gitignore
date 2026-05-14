@@ -38,3 +38,6 @@ coreutils/touch
 coreutils/tee
 coreutils/tree
 coreutils/test
+building/isoroot/initramfs/bin/initsys.c�M
+coreutils/initsys.c�M
+building/isoroot/initrd.img
