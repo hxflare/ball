@@ -138,20 +138,33 @@ void draw_lines(cstring *ab, int *rows_left, int *row) {
     cchstr_append(&full, ' ');
     ccstr_append(&full, &(ctab->lines[lineidx]));
     cstr_free(&idxstr);
-    if (full.len > (unsigned)run_data.cols) {
+    if (full.len > (unsigned)run_data.cols - 1) {
       if (!run_data.staticconf.wordwrap) {
-        int av_cols = run_data.cols - 3 - max_idxlen -4;
-        cstring truncated = CSTRING_INIT;
-        getrange(&(ctab->lines[lineidx]), av_cols, ctab->line_scroll[lineidx],
-                 &truncated);
-        ccstr_append(&(ab[*row]), &idxstr);
-        cchstr_append(&(ab[*row]), ' ');
-        cchstr_append(&(ab[*row]), run_data.staticconf.line_char);
-        cchstr_append(&(ab[*row]), ' ');
-        cchstr_append(&(ab[*row]), '<');
-        ccstr_append(&(ab[*row]), &truncated);
-        cchstr_append(&(ab[*row]), '>');
-        cstr_free(&truncated);
+        int prefix_len = max_idxlen + 4;
+        int suffix_len = 2;
+        int av_cols = run_data.cols - prefix_len - suffix_len;
+
+        if (av_cols <= 0) {
+          ccstr_append(&(ab[*row]), &idxstr);
+          cchstr_append(&(ab[*row]), ' ');
+          cchstr_append(&(ab[*row]), run_data.staticconf.line_char);
+          (*rows_left)--;
+          (*row)++;
+        } else {
+          cstring truncated = CSTRING_INIT;
+          getrange(&(ctab->lines[lineidx]), av_cols, ctab->line_scroll[lineidx],
+                   &truncated);
+          ccstr_append(&(ab[*row]), &idxstr);
+          cchstr_append(&(ab[*row]), ' ');
+          cchstr_append(&(ab[*row]), run_data.staticconf.line_char);
+          cchstr_append(&(ab[*row]), ' ');
+          cchstr_append(&(ab[*row]), '<');
+          ccstr_append(&(ab[*row]), &truncated);
+          cchstr_append(&(ab[*row]), '>');
+          cstr_free(&truncated);
+          (*rows_left)--;
+          (*row)++;
+        }
       } else {
         int div = full.len / run_data.cols;
         for (int cd = 0; cd < div && *rows_left > 0; cd++) {
@@ -240,7 +253,6 @@ void refresh() {
   }
   int max_idxlen = intlen(run_data.tabs[run_data.c_tab].rows);
   run_data.col_lbound = 3 + max_idxlen;
-
   int left = run_data.rows;
   cstring ab = CSTRING_INIT;
   cstring *lines_b = malloc(sizeof(cstring) * run_data.rows);
