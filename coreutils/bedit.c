@@ -19,6 +19,7 @@ struct tab {
   cstring *lines;
   int *dirty;
   int dirty_n;
+  int *line_scroll;
 };
 struct static_editor_config {
   char line_char;
@@ -128,6 +129,9 @@ void draw_lines(cstring *ab, int *rows_left, int *row) {
     cstring full = CSTRING_INIT;
     cstring idxstr = CSTRING_INIT;
     int_to_cstr(lineidx, &idxstr);
+    for (int i = idxstr.len; i < max_idxlen; i++) {
+      cchstr_append(&idxstr, ' ');
+    }
     ccstr_append(&full, &idxstr);
     cchstr_append(&full, ' ');
     cchstr_append(&full, run_data.staticconf.line_char);
@@ -135,23 +139,38 @@ void draw_lines(cstring *ab, int *rows_left, int *row) {
     ccstr_append(&full, &(ctab->lines[lineidx]));
     cstr_free(&idxstr);
     if (full.len > (unsigned)run_data.cols) {
-      int div = full.len / run_data.cols;
-      for (int cd = 0; cd < div && *rows_left > 0; cd++) {
-        cstring frac = CSTRING_INIT;
-        getrange(&full, run_data.cols, cd * run_data.cols, &frac);
-        ccstr_append(&(ab[*row]), &frac);
-        cstr_free(&frac);
-        (*rows_left)--;
-        (*row)++;
-      }
-      int remainder = full.len % run_data.cols;
-      if (remainder > 0 && *rows_left > 0) {
-        cstring frac = CSTRING_INIT;
-        getrange(&full, remainder, div * run_data.cols, &frac);
-        ccstr_append(&(ab[*row]), &frac);
-        cstr_free(&frac);
-        (*rows_left)--;
-        (*row)++;
+      if (!run_data.staticconf.wordwrap) {
+        int av_cols = run_data.cols - 3 - max_idxlen -4;
+        cstring truncated = CSTRING_INIT;
+        getrange(&(ctab->lines[lineidx]), av_cols, ctab->line_scroll[lineidx],
+                 &truncated);
+        ccstr_append(&(ab[*row]), &idxstr);
+        cchstr_append(&(ab[*row]), ' ');
+        cchstr_append(&(ab[*row]), run_data.staticconf.line_char);
+        cchstr_append(&(ab[*row]), ' ');
+        cchstr_append(&(ab[*row]), '<');
+        ccstr_append(&(ab[*row]), &truncated);
+        cchstr_append(&(ab[*row]), '>');
+        cstr_free(&truncated);
+      } else {
+        int div = full.len / run_data.cols;
+        for (int cd = 0; cd < div && *rows_left > 0; cd++) {
+          cstring frac = CSTRING_INIT;
+          getrange(&full, run_data.cols, cd * run_data.cols, &frac);
+          ccstr_append(&(ab[*row]), &frac);
+          cstr_free(&frac);
+          (*rows_left)--;
+          (*row)++;
+        }
+        int remainder = full.len % run_data.cols;
+        if (remainder > 0 && *rows_left > 0) {
+          cstring frac = CSTRING_INIT;
+          getrange(&full, remainder, div * run_data.cols, &frac);
+          ccstr_append(&(ab[*row]), &frac);
+          cstr_free(&frac);
+          (*rows_left)--;
+          (*row)++;
+        }
       }
     } else {
       ccstr_append(&(ab[*row]), &full);
@@ -274,6 +293,7 @@ int opentab(char *filename) {
   (c_tab->filename) = (cstring)CSTRING_INIT;
   cpstr_append(&(c_tab->filename), filename, strlen(filename));
   read_lines(c_tab->filename, c_tab);
+  c_tab->line_scroll = calloc(c_tab->rows, sizeof(int));
   return 0;
 }
 // init
@@ -287,7 +307,7 @@ void initconf() {
   run_data.ccols = run_data.col_lbound;
   run_data.tabs_n = 0;
   run_data.staticconf.line_char = '~';
-  run_data.staticconf.wordwrap = 1;
+  run_data.staticconf.wordwrap = 0;
 }
 int main(int argc, char **argv) {
   tcgetattr(STDIN_FILENO, &(run_data.orig_termios));
