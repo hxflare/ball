@@ -259,8 +259,10 @@ void draw_win(cstring *ab, struct floating_win *win) {
       maxlen = win->choices[i].len;
     }
   }
-  cstring *lines = calloc(win->n + 2, maxlen + 2);
-
+  cstring *lines = calloc(win->n + 2, sizeof(cstring) * (maxlen + 2));
+  if (run_data.cols < maxlen + 2 || run_data.rows < win->n + 2) {
+    return;
+  }
   for (int i = 0; i < maxlen + 2; i++) {
     cchstr_append(&(lines[0]), '-');
     cchstr_append(&(lines[maxlen + 2]), '-');

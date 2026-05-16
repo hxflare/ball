@@ -123,17 +123,17 @@ void cstr_replace(int a, int b, cstring *rep, cstring *with) {
   char *new_str = realloc(rep->str, new_len);
   if (!new_str)
     return;
-  // move to the right
+
   if (b + 1 < (int)rep->len) {
     memmove(new_str + a + (with ? with->len : 0), new_str + b + 1,
             rep->len - b - 1);
-
-    // insert the string
-    if (with)
-      memcpy(new_str + a, with->str, with->len);
-    rep->len = new_len;
-    rep->str = new_str;
   }
+
+  if (with)
+    memcpy(new_str + a, with->str, with->len);
+
+  rep->len = new_len;
+  rep->str = new_str;
 }
 void cchstr_append(cstring *main, char app) {
   char *new = realloc(main->str, main->len + 1);
@@ -173,11 +173,11 @@ int intlen(int n) {
   }
   return len;
 }
-int getrange(cstring *str, int range, int start,cstring *ret) {
-    if (str->len < start+range)
-      return 0;
-    char *new = calloc(1, range);
-    memcpy(new, str->str+start, range);
-    *ret=(cstring){new,range};
-    return 1;
+int getrange(cstring *str, int range, int start, cstring *ret) {
+  if (str->len < start + range)
+    return 0;
+  char *new = calloc(1, range);
+  memcpy(new, str->str + start, range);
+  *ret = (cstring){new, range};
+  return 1;
 }
