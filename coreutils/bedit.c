@@ -12,6 +12,21 @@
 #define CK(k) ((k) & 0x1f)
 #define UCK(k) ((k) | 0x60)
 // data structures
+enum editor_mode {
+  view,
+  edit,
+  floating_tab,
+  floating_settings,
+  floating_modesel,
+  command,
+  enter_choice
+};
+struct floating_win {
+  cstring *choices;
+  int n;
+  cstring title;
+  int c_choice;
+};
 struct tab {
   int start;
   cstring filename;
@@ -26,6 +41,7 @@ struct static_editor_config {
   int wordwrap;
 };
 struct runtime_data {
+
   int rows;
   int cols;
   int crows;
@@ -35,7 +51,8 @@ struct runtime_data {
   int col_lbound;
   int col_rbound;
   int c_tab;
-  char mode;
+  struct floating_win window;
+  enum editor_mode mode;
   struct tab *tabs;
   int tabs_n;
   struct static_editor_config staticconf;
@@ -137,11 +154,10 @@ void draw_lines(cstring *ab, int *rows_left, int *row) {
     cchstr_append(&full, run_data.staticconf.line_char);
     cchstr_append(&full, ' ');
     ccstr_append(&full, &(ctab->lines[lineidx]));
-    cstr_free(&idxstr);
-    if (full.len > (unsigned)run_data.cols - 1) {
+    if (full.len > (unsigned)run_data.cols - 2) {
       if (!run_data.staticconf.wordwrap) {
         int prefix_len = max_idxlen + 4;
-        int suffix_len = 2;
+        int suffix_len = 3;
         int av_cols = run_data.cols - prefix_len - suffix_len;
 
         if (av_cols <= 0) {
@@ -190,6 +206,7 @@ void draw_lines(cstring *ab, int *rows_left, int *row) {
       (*rows_left)--;
       (*row)++;
     }
+    cstr_free(&idxstr);
     cstr_free(&full);
   }
 }
@@ -231,7 +248,36 @@ void draw_top(cstring *ab, int *rows_left, int *row) {
     }
   }
   cstr_free(&full);
+
   run_data.row_ubound = *row;
+}
+struct floating_win *create_floating(enum editor_mode type) {}
+void draw_win(cstring *ab, struct floating_win *win) {
+  int maxlen = 0;
+  for (int i = 0; i < win->n; i++) {
+    if (win->choices[i].len > maxlen) {
+      maxlen = win->choices[i].len;
+    }
+  }
+  cstring *lines = calloc(win->n + 2, maxlen + 2);
+
+  for (int i = 0; i < maxlen + 2; i++) {
+    cchstr_append(&(lines[0]), '-');
+    cchstr_append(&(lines[maxlen + 2]), '-');
+  }
+  for (int i = 1; i < win->n; i++) {
+    cchstr_append(&(lines[i]), ' ');
+    ccstr_append(&(lines[i]), &(win->choices[i - 1]));
+    for (int j = win->choices[i - 1].len + 1; j < maxlen; j++) {
+      cchstr_append(&(lines[i]), ' ');
+    }
+  }
+  int start_row = run_data.rows / 2 - (win->n + 2) / 2;
+  int start_col = run_data.cols / 2 - (maxlen + 2) / 2;
+  for (int i = 0; i < win->n + 2; i++) {
+    cstr_replace(start_col, start_col + maxlen + 2, &(ab[i + start_row]),
+                 &(lines[i]));
+  }
 }
 void merge_lines(cstring *ab, cstring *lines) {
   for (int i = 0; i < run_data.rows; i++) {

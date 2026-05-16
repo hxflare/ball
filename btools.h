@@ -1,6 +1,6 @@
 #ifndef BTOOLS_H
 #define BTOOLS_H
-#define CSTRING_INIT {NULL,0}
+#define CSTRING_INIT {NULL, 0}
 typedef enum {
   undefined = 1024,
   arrow_up = 1,
@@ -25,5 +25,6 @@ char *concat(const char *s1, const char *s2);
 int str_isdigit(const char *str);
 void int_to_cstr(int n, cstring *str);
 int intlen(int n);
-int getrange(cstring *str, int range, int start,cstring *ret);
+int getrange(cstring *str, int range, int start, cstring *ret);
+void cstr_replace(int a, int b, cstring *rep, cstring *with);
 #endif
