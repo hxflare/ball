@@ -18,8 +18,8 @@ enum editor_mode {
   floating_tab,
   floating_settings,
   floating_modesel,
+  floating_qact,
   command,
-  enter_choice
 };
 struct floating_win {
   cstring *choices;
@@ -51,7 +51,7 @@ struct runtime_data {
   int col_lbound;
   int col_rbound;
   int c_tab;
-  struct floating_win window;
+  struct floating_win *window;
   enum editor_mode mode;
   struct tab *tabs;
   int tabs_n;
@@ -157,7 +157,7 @@ void draw_lines(cstring *ab, int *rows_left, int *row) {
     if (full.len > (unsigned)run_data.cols - 2) {
       if (!run_data.staticconf.wordwrap) {
         int prefix_len = max_idxlen + 4;
-        int suffix_len = 3;
+        int suffix_len = 1;
         int av_cols = run_data.cols - prefix_len - suffix_len;
 
         if (av_cols <= 0) {
@@ -174,9 +174,13 @@ void draw_lines(cstring *ab, int *rows_left, int *row) {
           cchstr_append(&(ab[*row]), ' ');
           cchstr_append(&(ab[*row]), run_data.staticconf.line_char);
           cchstr_append(&(ab[*row]), ' ');
+          cstcol(&(ab[*row]), black, white);
           cchstr_append(&(ab[*row]), '<');
+          cstcol(&(ab[*row]), white, black);
           ccstr_append(&(ab[*row]), &truncated);
+          cstcol(&(ab[*row]), black, white);
           cchstr_append(&(ab[*row]), '>');
+          cstcol(&(ab[*row]), white, black);
           cstr_free(&truncated);
           (*rows_left)--;
           (*row)++;
@@ -251,7 +255,33 @@ void draw_top(cstring *ab, int *rows_left, int *row) {
 
   run_data.row_ubound = *row;
 }
-struct floating_win *create_floating(enum editor_mode type) {}
+struct floating_win *create_floating(enum editor_mode type) {
+  struct floating_win *win = calloc(1, sizeof(struct floating_win));
+  win->c_choice = 0;
+  win->title = (cstring)CSTRING_INIT;
+  switch (run_data.mode) {
+  case floating_tab:
+    goto tab_switch;
+    break;
+  case floating_settings:
+    goto settings;
+    break;
+  default:
+    return NULL;
+  }
+tab_switch:
+  cpstr_append(&(win->title), "Tabs", 4);
+  win->choices = calloc(run_data.tabs_n, sizeof(cstring));
+  for (int i = 0; i < run_data.tabs_n; i++) {
+    win->choices[i] = (cstring)CSTRING_INIT;
+    ccstr_append(&(win->choices[i]), &(run_data.tabs[i].filename));
+    win->n++;
+  }
+  return win;
+settings:
+  cpstr_append(&(win->title), "Conf", 4);
+  return win;
+}
 void draw_win(cstring *ab, struct floating_win *win) {
   int maxlen = 0;
   for (int i = 0; i < win->n; i++) {
@@ -259,8 +289,9 @@ void draw_win(cstring *ab, struct floating_win *win) {
       maxlen = win->choices[i].len;
     }
   }
-  cstring *lines = calloc(win->n + 2, sizeof(cstring) * (maxlen + 2));
+  cstring *lines = calloc(win->n + 2, sizeof(cstring));
   if (run_data.cols < maxlen + 2 || run_data.rows < win->n + 2) {
+    free(lines);
     return;
   }
   for (int i = 0; i < maxlen + 2; i++) {
@@ -280,6 +311,7 @@ void draw_win(cstring *ab, struct floating_win *win) {
     cstr_replace(start_col, start_col + maxlen + 2, &(ab[i + start_row]),
                  &(lines[i]));
   }
+  free(lines);
 }
 void merge_lines(cstring *ab, cstring *lines) {
   for (int i = 0; i < run_data.rows; i++) {
@@ -328,7 +360,11 @@ void refresh() {
   free(lines_b);
 }
 void read_lines(cstring filename, struct tab *out) {
-  int fd = open(filename.str, O_CREAT | O_RDWR, 0644);
+  char *path = malloc(filename.len + 1);
+  memcpy(path, filename.str, filename.len);
+  path[filename.len] = '\0';
+  int fd = open(path, O_CREAT | O_RDWR, 0644);
+  free(path);
   char c;
   int line_idx = 0;
   out->lines = realloc(out->lines, sizeof(cstring) * (line_idx + 1));
