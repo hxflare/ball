@@ -172,6 +172,11 @@ int intlen(int n) {
   }
   return len;
 }
+void cstcol(cstring *str, ecolor fg, ecolor bg) {
+  char color_esc[16];
+  int len = sprintf(color_esc, "\033[%i;%im", fg, bg + 10);
+  cpstr_append(str, color_esc, len);
+}
 int getrange(cstring *str, int range, int start, cstring *ret) {
   if (str->len < start + range)
     return 0;

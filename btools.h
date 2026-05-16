@@ -8,6 +8,16 @@ typedef enum {
   arrow_left = 3,
   arrow_down = 4
 } kkey_t;
+typedef enum {
+  white = 37,
+  black = 30,
+  red = 31,
+  green = 32,
+  yellow = 33,
+  blue = 34,
+  magenta = 35,
+  cyan = 36
+} ecolor;
 typedef struct cstring {
   char *str;
   int len;
@@ -27,4 +37,5 @@ void int_to_cstr(int n, cstring *str);
 int intlen(int n);
 int getrange(cstring *str, int range, int start, cstring *ret);
 void cstr_replace(int a, int b, cstring *rep, cstring *with);
+void cstcol(cstring *str, ecolor fg, ecolor bg);
 #endif
