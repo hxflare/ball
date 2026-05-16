@@ -116,22 +116,21 @@ void cstr_free(cstring *str) {
   str->len = 0;
 }
 void cstr_replace(int a, int b, cstring *rep, cstring *with) {
+  while ((int)rep->len < a) {
+    cchstr_append(rep, ' ');
+  }
   int removed = b - a + 1;
   int shift = (with ? with->len : 0) - removed;
   int new_len = rep->len + shift;
-
   char *new_str = realloc(rep->str, new_len);
   if (!new_str)
     return;
-
   if (b + 1 < (int)rep->len) {
     memmove(new_str + a + (with ? with->len : 0), new_str + b + 1,
             rep->len - b - 1);
   }
-
   if (with)
     memcpy(new_str + a, with->str, with->len);
-
   rep->len = new_len;
   rep->str = new_str;
 }
