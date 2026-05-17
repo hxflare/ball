@@ -1,5 +1,4 @@
 #include "../btools.h"
-#include <ctype.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,6 +21,7 @@ enum editor_mode {
   command,
 };
 struct floating_win {
+  int start;
   cstring *choices;
   int n;
   cstring title;
@@ -39,6 +39,7 @@ struct tab {
 struct static_editor_config {
   char line_char;
   int wordwrap;
+  int tab_style;
 };
 struct runtime_data {
 
@@ -115,27 +116,87 @@ void cmove(char key) {
   if (run_data.tabs[run_data.c_tab].start > max_start)
     run_data.tabs[run_data.c_tab].start = max_start;
 }
-void process() {
+void process_input() {
   char c = 0;
   if (read(STDIN_FILENO, &c, 1) != 1)
     return;
-  switch (c) {
-  case CK('x'):
-    disableRawMode();
-    exit(0);
-  case CK('w'):
-  case CK('s'):
-  case CK('a'):
-  case CK('d'):
-    cmove(UCK(c));
-    break;
-  case CK('i'):
-    if (run_data.c_tab < run_data.tabs_n - 1) {
-      run_data.c_tab++;
-    } else {
-      run_data.c_tab = 0;
+  if (c == CK('x')) {
+    cprint("exited\r\n");
+  }
+  if (run_data.mode == view) {
+
+    switch (c) {
+
+    case CK('w'):
+    case CK('s'):
+    case CK('a'):
+    case CK('d'):
+      cmove(UCK(c));
+      break;
+    case CK('i'):
+      if (run_data.c_tab < run_data.tabs_n - 1) {
+        run_data.c_tab++;
+      } else {
+        run_data.c_tab = 0;
+      }
+      break;
     }
-    break;
+  }
+  if (run_data.mode == floating_modesel || run_data.mode == floating_qact ||
+      run_data.mode == floating_settings || run_data.mode == floating_tab) {
+    switch (c) {
+    case CK('w'):
+      run_data.window->c_choice--;
+      break;
+    case CK('s'):
+      run_data.window->c_choice++;
+      break;
+    case '\x1b':
+      free(run_data.window);
+      run_data.mode = view;
+      break;
+    }
+    if (run_data.window->c_choice < 0) {
+      run_data.window->c_choice = 0;
+    } else if (run_data.window->c_choice > run_data.window->n - 1) {
+      run_data.window->c_choice = run_data.window->n - 1;
+    }
+  }
+  if (run_data.mode == floating_settings) {
+    if (c == '\n') {
+      switch (run_data.window->c_choice) {
+      case 1:
+        run_data.staticconf.wordwrap = !run_data.staticconf.wordwrap;
+        break;
+      case 2:
+        run_data.staticconf.tab_style = !run_data.staticconf.tab_style;
+      }
+    } else if (run_data.window->c_choice == 0) {
+      run_data.staticconf.line_char = c;
+    }
+  } else if (run_data.mode == floating_tab) {
+    if (c == '\n') {
+      run_data.c_tab = run_data.window->c_choice;
+      run_data.mode = view;
+      free(run_data.window);
+    }
+  } else if (run_data.mode == floating_modesel) {
+    if (c == '\n') {
+      switch (run_data.window->c_choice) {
+      case 0:
+        run_data.mode = view;
+        break;
+      case 1:
+        run_data.mode = edit;
+        break;
+      case 2:
+        run_data.mode = command;
+        break;
+      case 3:
+        run_data.mode = floating_settings;
+        break;
+      }
+    }
   }
 }
 void draw_lines(cstring *ab, int *rows_left, int *row) {
@@ -255,16 +316,33 @@ void draw_top(cstring *ab, int *rows_left, int *row) {
 
   run_data.row_ubound = *row;
 }
-struct floating_win *create_floating(enum editor_mode type) {
-  struct floating_win *win = calloc(1, sizeof(struct floating_win));
-  win->c_choice = 0;
-  win->title = (cstring)CSTRING_INIT;
+struct floating_win *man_floating(enum editor_mode type) {
+  struct floating_win *win = run_data.window;
+  if (type == view || type == command || type == edit) {
+    return NULL;
+  }
+  if (win == NULL) {
+    win->c_choice = 0;
+    win->start = 0;
+    win->title = (cstring)CSTRING_INIT;
+  } else {
+    for (int i = 0; i < win->n; i++) {
+      cstr_free(&(win->choices[i]));
+    }
+    win->n = 0;
+    free(win->choices);
+    cstr_free(&(win->title));
+    win->title = (cstring)CSTRING_INIT;
+  }
   switch (run_data.mode) {
   case floating_tab:
     goto tab_switch;
     break;
   case floating_settings:
     goto settings;
+    break;
+  case floating_modesel:
+    goto mode;
     break;
   default:
     return NULL;
@@ -280,6 +358,34 @@ tab_switch:
   return win;
 settings:
   cpstr_append(&(win->title), "Conf", 4);
+  win->choices[0] = (cstring)CSTRING_INIT;
+  cpstr_append(&(win->choices[0]), "gutter ", 8);
+  cchstr_append(&(win->choices[0]), run_data.staticconf.line_char);
+  win->choices[1] = (cstring)CSTRING_INIT;
+  cpstr_append(&(win->choices[1]), "ww ", 3);
+  if (run_data.staticconf.wordwrap) {
+    cchstr_append(&(win->choices[0]), '+');
+  } else {
+    cchstr_append(&(win->choices[0]), '-');
+  }
+  win->choices[2] = (cstring)CSTRING_INIT;
+  cpstr_append(&(win->choices[2]), "ts ", 3);
+  if (run_data.staticconf.wordwrap) {
+    cpstr_append(&(win->choices[2]), "win", 3);
+  } else {
+    cpstr_append(&(win->choices[2]), "bar", 3);
+  }
+  return win;
+mode:
+  cpstr_append(&(win->title), "Mode", 4);
+  win->choices[0] = (cstring)CSTRING_INIT;
+  cpstr_append(&(win->choices[0]), "view", 8);
+  win->choices[1] = (cstring)CSTRING_INIT;
+  cpstr_append(&(win->choices[1]), "edit", 8);
+  win->choices[2] = (cstring)CSTRING_INIT;
+  cpstr_append(&(win->choices[2]), "comm", 8);
+  win->choices[3] = (cstring)CSTRING_INIT;
+  cpstr_append(&(win->choices[3]), "conf", 8);
   return win;
 }
 void draw_win(cstring *ab, struct floating_win *win) {
@@ -416,7 +522,7 @@ int main(int argc, char **argv) {
   while (1) {
     gwinsize(&(run_data.rows), &(run_data.cols));
     refresh();
-    process();
+    process_input();
   }
   return 0;
 }
