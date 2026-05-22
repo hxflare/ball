@@ -198,97 +198,7 @@ mode:
   return win;
   } */
 void process_input() {
-  char c = 0;
-  if (read(STDIN_FILENO, &c, 1) != 1)
-    return;
-  if (c == CK('x')) {
-    exit(0);
-    cprint("exited\r\n");
-  }
-  if (run_data.mode == view) {
 
-    switch (c) {
-
-    case CK('w'):
-    case CK('s'):
-    case CK('a'):
-    case CK('d'):
-      cmove(UCK(c));
-      break;
-    case CK('i'):
-      if (run_data.staticconf.tab_style) {
-
-        if (run_data.c_tab < run_data.tabs_n - 1) {
-          run_data.c_tab++;
-        } else {
-          run_data.c_tab = 0;
-        }
-        break;
-      } else {
-        run_data.mode = floating_tab;
-      }
-    }
-  }
-  if (run_data.mode == floating_modesel || run_data.mode == floating_qact ||
-      run_data.mode == floating_settings || run_data.mode == floating_tab) {
-    switch (c) {
-    case CK('w'):
-      run_data.window->c_choice--;
-      break;
-    case CK('s'):
-      run_data.window->c_choice++;
-      break;
-    case '\x1b':
-      free(run_data.window);
-      run_data.window = NULL;
-      run_data.mode = view;
-      break;
-    }
-    if (run_data.window != NULL) {
-      if (run_data.window->c_choice < 0) {
-        run_data.window->c_choice = 0;
-      } else if (run_data.window->c_choice > run_data.window->n - 1) {
-        run_data.window->c_choice = run_data.window->n - 1;
-      }
-    }
-  }
-  if (run_data.mode == floating_settings) {
-    if (c == '\n') {
-      switch (run_data.window->c_choice) {
-      case 1:
-        run_data.staticconf.wordwrap = !run_data.staticconf.wordwrap;
-        break;
-      case 2:
-        run_data.staticconf.tab_style = !run_data.staticconf.tab_style;
-      }
-    } else if (run_data.window->c_choice == 0) {
-      run_data.staticconf.line_char = c;
-    }
-  } else if (run_data.mode == floating_tab) {
-    if (c == '\n') {
-      run_data.c_tab = run_data.window->c_choice;
-      run_data.mode = view;
-      free(run_data.window);
-      run_data.window = NULL;
-    }
-  } else if (run_data.mode == floating_modesel) {
-    if (c == '\n') {
-      switch (run_data.window->c_choice) {
-      case 0:
-        run_data.mode = view;
-        break;
-      case 1:
-        run_data.mode = edit;
-        break;
-      case 2:
-        run_data.mode = command;
-        break;
-      case 3:
-        run_data.mode = floating_settings;
-        break;
-      }
-    }
-  }
 }
 void draw_lines(cstring *ab, int *rows_left, int *row) {
   int max_idxlen = intlen(run_data.tabs[run_data.c_tab].rows);
@@ -543,7 +453,7 @@ void initconf() {
   run_data.crows = run_data.row_ubound;
   run_data.ccols = run_data.col_lbound;
   run_data.tabs_n = 0;
-  run_data.staticconf.line_char = '~';
+  run_data.staticconf.line_char = '*';
   run_data.staticconf.wordwrap = 0;
   run_data.staticconf.tab_style = 1;
 }
