@@ -116,11 +116,93 @@ void cmove(char key) {
   if (run_data.tabs[run_data.c_tab].start > max_start)
     run_data.tabs[run_data.c_tab].start = max_start;
 }
+/*
+struct floating_win *man_floating() {
+  struct floating_win *win = run_data.window;
+  if (run_data.mode == view || run_data.mode == command ||
+      run_data.mode == edit) {
+    return NULL;
+  }
+  if (win == NULL) {
+    win = calloc(1, sizeof(struct floating_win));
+    win->c_choice = 0;
+    win->start = 0;
+    win->title = (cstring)CSTRING_INIT;
+  } else {
+    for (int i = 0; i < win->n; i++) {
+      cstr_free(&(win->choices[i]));
+    }
+    win->n = 0;
+    free(win->choices);
+    win->choices = NULL;
+    cstr_free(&(win->title));
+    win->title = (cstring)CSTRING_INIT;
+  }
+  switch (run_data.mode) {
+  case floating_tab:
+    goto tab_switch;
+    break;
+  case floating_settings:
+    goto settings;
+    break;
+  case floating_modesel:
+    goto mode;
+    break;
+  default:
+    free(win);
+    return NULL;
+  }
+tab_switch:
+  cpstr_append(&(win->title), "Tabs", 4);
+  win->choices = calloc(run_data.tabs_n, sizeof(cstring));
+  for (int i = 0; i < run_data.tabs_n; i++) {
+    win->choices[i] = (cstring)CSTRING_INIT;
+    ccstr_append(&(win->choices[i]), &(run_data.tabs[i].filename));
+    win->n++;
+  }
+  return win;
+settings:
+  win->choices = calloc(3, sizeof(cstring));
+  win->n = 3;
+  cpstr_append(&(win->title), "Conf", 4);
+  win->choices[0] = (cstring)CSTRING_INIT;
+  cpstr_append(&(win->choices[0]), "gutter ", 7);
+  cchstr_append(&(win->choices[0]), run_data.staticconf.line_char);
+  win->choices[1] = (cstring)CSTRING_INIT;
+  cpstr_append(&(win->choices[1]), "ww ", 3);
+  if (run_data.staticconf.wordwrap) {
+    cchstr_append(&(win->choices[1]), '+');
+  } else {
+    cchstr_append(&(win->choices[1]), '-');
+  }
+  win->choices[2] = (cstring)CSTRING_INIT;
+  cpstr_append(&(win->choices[2]), "ts ", 3);
+  if (run_data.staticconf.tab_style) {
+    cpstr_append(&(win->choices[2]), "win", 3);
+  } else {
+    cpstr_append(&(win->choices[2]), "bar", 3);
+  }
+  return win;
+mode:
+  win->choices = calloc(4, sizeof(cstring));
+  win->n = 4;
+  cpstr_append(&(win->title), "Mode", 4);
+  win->choices[0] = (cstring)CSTRING_INIT;
+  cpstr_append(&(win->choices[0]), "view", 4);
+  win->choices[1] = (cstring)CSTRING_INIT;
+  cpstr_append(&(win->choices[1]), "edit", 4);
+  win->choices[2] = (cstring)CSTRING_INIT;
+  cpstr_append(&(win->choices[2]), "comm", 4);
+  win->choices[3] = (cstring)CSTRING_INIT;
+  cpstr_append(&(win->choices[3]), "conf", 4);
+  return win;
+  } */
 void process_input() {
   char c = 0;
   if (read(STDIN_FILENO, &c, 1) != 1)
     return;
   if (c == CK('x')) {
+    exit(0);
     cprint("exited\r\n");
   }
   if (run_data.mode == view) {
@@ -134,12 +216,17 @@ void process_input() {
       cmove(UCK(c));
       break;
     case CK('i'):
-      if (run_data.c_tab < run_data.tabs_n - 1) {
-        run_data.c_tab++;
+      if (run_data.staticconf.tab_style) {
+
+        if (run_data.c_tab < run_data.tabs_n - 1) {
+          run_data.c_tab++;
+        } else {
+          run_data.c_tab = 0;
+        }
+        break;
       } else {
-        run_data.c_tab = 0;
+        run_data.mode = floating_tab;
       }
-      break;
     }
   }
   if (run_data.mode == floating_modesel || run_data.mode == floating_qact ||
@@ -153,13 +240,16 @@ void process_input() {
       break;
     case '\x1b':
       free(run_data.window);
+      run_data.window = NULL;
       run_data.mode = view;
       break;
     }
-    if (run_data.window->c_choice < 0) {
-      run_data.window->c_choice = 0;
-    } else if (run_data.window->c_choice > run_data.window->n - 1) {
-      run_data.window->c_choice = run_data.window->n - 1;
+    if (run_data.window != NULL) {
+      if (run_data.window->c_choice < 0) {
+        run_data.window->c_choice = 0;
+      } else if (run_data.window->c_choice > run_data.window->n - 1) {
+        run_data.window->c_choice = run_data.window->n - 1;
+      }
     }
   }
   if (run_data.mode == floating_settings) {
@@ -179,6 +269,7 @@ void process_input() {
       run_data.c_tab = run_data.window->c_choice;
       run_data.mode = view;
       free(run_data.window);
+      run_data.window = NULL;
     }
   } else if (run_data.mode == floating_modesel) {
     if (c == '\n') {
@@ -316,82 +407,13 @@ void draw_top(cstring *ab, int *rows_left, int *row) {
 
   run_data.row_ubound = *row;
 }
-struct floating_win *man_floating(enum editor_mode type) {
-  struct floating_win *win = run_data.window;
-  if (type == view || type == command || type == edit) {
-    return NULL;
-  }
-  if (win == NULL) {
-    win->c_choice = 0;
-    win->start = 0;
-    win->title = (cstring)CSTRING_INIT;
-  } else {
-    for (int i = 0; i < win->n; i++) {
-      cstr_free(&(win->choices[i]));
-    }
-    win->n = 0;
-    free(win->choices);
-    cstr_free(&(win->title));
-    win->title = (cstring)CSTRING_INIT;
-  }
-  switch (run_data.mode) {
-  case floating_tab:
-    goto tab_switch;
-    break;
-  case floating_settings:
-    goto settings;
-    break;
-  case floating_modesel:
-    goto mode;
-    break;
-  default:
-    return NULL;
-  }
-tab_switch:
-  cpstr_append(&(win->title), "Tabs", 4);
-  win->choices = calloc(run_data.tabs_n, sizeof(cstring));
-  for (int i = 0; i < run_data.tabs_n; i++) {
-    win->choices[i] = (cstring)CSTRING_INIT;
-    ccstr_append(&(win->choices[i]), &(run_data.tabs[i].filename));
-    win->n++;
-  }
-  return win;
-settings:
-  cpstr_append(&(win->title), "Conf", 4);
-  win->choices[0] = (cstring)CSTRING_INIT;
-  cpstr_append(&(win->choices[0]), "gutter ", 8);
-  cchstr_append(&(win->choices[0]), run_data.staticconf.line_char);
-  win->choices[1] = (cstring)CSTRING_INIT;
-  cpstr_append(&(win->choices[1]), "ww ", 3);
-  if (run_data.staticconf.wordwrap) {
-    cchstr_append(&(win->choices[0]), '+');
-  } else {
-    cchstr_append(&(win->choices[0]), '-');
-  }
-  win->choices[2] = (cstring)CSTRING_INIT;
-  cpstr_append(&(win->choices[2]), "ts ", 3);
-  if (run_data.staticconf.wordwrap) {
-    cpstr_append(&(win->choices[2]), "win", 3);
-  } else {
-    cpstr_append(&(win->choices[2]), "bar", 3);
-  }
-  return win;
-mode:
-  cpstr_append(&(win->title), "Mode", 4);
-  win->choices[0] = (cstring)CSTRING_INIT;
-  cpstr_append(&(win->choices[0]), "view", 8);
-  win->choices[1] = (cstring)CSTRING_INIT;
-  cpstr_append(&(win->choices[1]), "edit", 8);
-  win->choices[2] = (cstring)CSTRING_INIT;
-  cpstr_append(&(win->choices[2]), "comm", 8);
-  win->choices[3] = (cstring)CSTRING_INIT;
-  cpstr_append(&(win->choices[3]), "conf", 8);
-  return win;
-}
+/*
 void draw_win(cstring *ab, struct floating_win *win) {
+  if (win == NULL)
+    return;
   int maxlen = 0;
   for (int i = 0; i < win->n; i++) {
-    if (win->choices[i].len > maxlen) {
+    if ((int)win->choices[i].len > maxlen) {
       maxlen = win->choices[i].len;
     }
   }
@@ -402,9 +424,9 @@ void draw_win(cstring *ab, struct floating_win *win) {
   }
   for (int i = 0; i < maxlen + 2; i++) {
     cchstr_append(&(lines[0]), '-');
-    cchstr_append(&(lines[maxlen + 2]), '-');
+    cchstr_append(&(lines[win->n + 1]), '-');
   }
-  for (int i = 1; i < win->n; i++) {
+  for (int i = 1; i <= win->n; i++) {
     cchstr_append(&(lines[i]), ' ');
     ccstr_append(&(lines[i]), &(win->choices[i - 1]));
     for (int j = win->choices[i - 1].len + 1; j < maxlen; j++) {
@@ -413,12 +435,21 @@ void draw_win(cstring *ab, struct floating_win *win) {
   }
   int start_row = run_data.rows / 2 - (win->n + 2) / 2;
   int start_col = run_data.cols / 2 - (maxlen + 2) / 2;
+  if (start_row < 0)
+    start_row = 0;
+  if (start_col < 0)
+    start_col = 0;
   for (int i = 0; i < win->n + 2; i++) {
+    if (i + start_row >= run_data.rows)
+      break;
     cstr_replace(start_col, start_col + maxlen + 2, &(ab[i + start_row]),
                  &(lines[i]));
   }
+  for (int i = 0; i < win->n + 2; i++) {
+    cstr_free(&(lines[i]));
+  }
   free(lines);
-}
+  } */
 void merge_lines(cstring *ab, cstring *lines) {
   for (int i = 0; i < run_data.rows; i++) {
     ccstr_append(ab, &(lines[i]));
@@ -437,6 +468,7 @@ void refresh() {
   } else {
     run_data.row_dbound = run_data.rows;
   }
+  //run_data.window = man_floating();
   int max_idxlen = intlen(run_data.tabs[run_data.c_tab].rows);
   run_data.col_lbound = 3 + max_idxlen;
   int left = run_data.rows;
@@ -448,8 +480,11 @@ void refresh() {
   }
   cpstr_append(&ab, "\x1b[?25l", 6);
   cpstr_append(&ab, "\x1b[H", 3);
-  draw_top(lines_b, &left, &row);
+  if (run_data.staticconf.tab_style) {
+    draw_top(lines_b, &left, &row);
+  }
   draw_lines(lines_b, &left, &row);
+  //draw_win(lines_b, run_data.window);
   merge_lines(&ab, lines_b);
 
   char posbuf[32];
@@ -510,6 +545,7 @@ void initconf() {
   run_data.tabs_n = 0;
   run_data.staticconf.line_char = '~';
   run_data.staticconf.wordwrap = 0;
+  run_data.staticconf.tab_style = 1;
 }
 int main(int argc, char **argv) {
   tcgetattr(STDIN_FILENO, &(run_data.orig_termios));
