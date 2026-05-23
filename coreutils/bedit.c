@@ -160,36 +160,30 @@ void cmove(char key) {
   }
   clamp_cursor();
 }
-void place_char(char c, cstring *ab) {
+void place_char(char c) {
   int c_abrow = abs_row();
   int c_abcol = run_data.ccols - run_data.col_lbound;
   struct tab *ctab = &(run_data.tabs[run_data.c_tab]);
-  if (c == '\n') {
-    ctab->lines = realloc(ctab->lines, sizeof(cstring) * (ctab->rows + 1));
-    if (!ctab->lines)
-      return;
-    memmove(ctab->lines + c_abrow + 2, ctab->lines + c_abrow + 1,
-            sizeof(cstring) * (ctab->rows - c_abrow - 1));
-    ctab->lines[c_abrow + 1] = (cstring)CSTRING_INIT;
 
-    int tail_len = ctab->lines[c_abrow].len - c_abcol;
-    if (tail_len > 0) {
-      cpstr_append(&ctab->lines[c_abrow + 1],
-                   ctab->lines[c_abrow].str + c_abcol, tail_len);
-      ctab->lines[c_abrow].len = c_abcol;
-    }
-
-    ctab->rows++;
-    ctab->line_scroll = realloc(ctab->line_scroll, sizeof(int) * ctab->rows);
-    if (!ctab->line_scroll)
-      return;
-    memmove(ctab->line_scroll + c_abrow + 2, ctab->line_scroll + c_abrow + 1,
-            sizeof(int) * (ctab->rows - c_abrow - 2));
-    ctab->line_scroll[c_abrow + 1] = 0;
-
-    run_data.crows++;
-    run_data.ccols = run_data.col_lbound;
-  } else if (c == KEY_BACKSPACE) {
+  if (c == KEY_ENTER) {
+      cstring *cur_line = &ctab->lines[c_abrow];
+      cstring tail = CSTRING_INIT;
+      if (c_abcol < cur_line->len) {
+        cpstr_append(&tail, cur_line->str + c_abcol, cur_line->len - c_abcol);
+        cur_line->len = c_abcol;
+      }
+      ctab->lines = realloc(ctab->lines, sizeof(cstring) * (ctab->rows + 1));
+      ctab->line_scroll = realloc(ctab->line_scroll, sizeof(int) * (ctab->rows + 1));
+      memmove(ctab->lines + c_abrow + 1, ctab->lines + c_abrow,
+              sizeof(cstring) * (ctab->rows - c_abrow));
+      memmove(ctab->line_scroll + c_abrow + 1, ctab->line_scroll + c_abrow,
+              sizeof(int) * (ctab->rows - c_abrow));
+      ctab->lines[c_abrow + 1] = tail;
+      ctab->line_scroll[c_abrow + 1] = 0;
+      ctab->rows++;
+      run_data.crows++;
+      run_data.ccols = run_data.col_lbound;
+    } else if (c == KEY_BACKSPACE) {
     if (c_abcol > 0) {
       cstring *line = &ctab->lines[c_abrow];
       memmove(line->str + c_abcol - 1, line->str + c_abcol,
@@ -211,6 +205,7 @@ void place_char(char c, cstring *ab) {
     }
   } else {
     chcinsert(&(ctab->lines[c_abrow]), c_abcol, c);
+    cmove('d');
   }
   clamp_cursor();
 }
@@ -220,7 +215,7 @@ int read_key() {
   if (read(STDIN_FILENO, &c, 1) != 1)
     return KEY_NULL;
   if (c != '\x1b')
-    return (unsigned char)c;
+    return c;
   char seq[2];
   if (read(STDIN_FILENO, &seq[0], 1) != 1)
     return KEY_ESC;
@@ -275,8 +270,9 @@ void process_input() {
     run_data.mode = view;
     break;
   default:
-    if (run_data.mode == edit)
-      place_char(key, run_data.tabs[run_data.c_tab].lines);
+    if (run_data.mode == edit) {
+      place_char(key);
+    }
     break;
   }
   clamp_cursor();
@@ -398,13 +394,13 @@ void draw_top(cstring *ab, int *rows_left, int *row) {
 
   run_data.row_ubound = *row;
 }
-void merge_lines(cstring *ab, cstring *lines) {
+void merge_lines(cstring *ab, cstring *lines, int used_rows) {
   for (int i = 0; i < run_data.rows; i++) {
-    ccstr_append(ab, &(lines[i]));
-    if (i != run_data.rows - 1) {
+    if (i < used_rows)
+      ccstr_append(ab, &(lines[i]));
+    cpstr_append(ab, "\x1b[K", 3);
+    if (i != run_data.rows - 1)
       cpstr_append(ab, "\r\n", 2);
-      cpstr_append(ab, "\x1b[K", 3);
-    }
   }
 }
 void draw_viewer() {
@@ -448,7 +444,7 @@ void draw_viewer() {
     run_data.ccols = run_data.col_lbound;
 
   draw_lines(lines_b, &left, &row);
-  merge_lines(&ab, lines_b);
+  merge_lines(&ab, lines_b,row);
 
   char posbuf[32];
   snprintf(posbuf, sizeof(posbuf), "\x1b[%d;%dH", run_data.crows + 1,
@@ -525,7 +521,7 @@ void initconf() {
   run_data.row_dbound = run_data.rows;
   run_data.tabs_n = 0;
   run_data.staticconf.line_char = '*';
-  run_data.staticconf.wordwrap = 1;
+  run_data.staticconf.wordwrap = 0;
   run_data.staticconf.tab_style = 1;
 }
 int main(int argc, char **argv) {
