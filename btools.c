@@ -192,3 +192,21 @@ void chcinsert(cstring *str, int idx, char ch) {
   str->str[idx] = ch;
   str->len++;
 }
+int cstrvislen(cstring *str) {
+  int vlen = 0;
+  for (int i = 0; i < str->len; i++) {
+    if (str->str[i] == '\x1b') {
+      i++;
+      if (i < str->len && str->str[i] == '[') {
+        i++;
+        while (i < str->len && str->str[i] != 'm')
+          i++;
+      }
+    } else if (str->str[i] == '\t') {
+      vlen += 4;
+    } else {
+      vlen++;
+    }
+  }
+  return vlen;
+}

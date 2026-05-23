@@ -95,6 +95,21 @@ int abs_row() {
   return run_data.tabs[run_data.c_tab].start + run_data.crows -
          run_data.row_ubound;
 }
+void write_file() {
+  cstring full = CSTRING_INIT;
+  struct tab *ctab = &(run_data.tabs[run_data.c_tab]);
+  for (int i = 0; i < ctab->rows; i++) {
+    ccstr_append(&full, &(ctab->lines[i]));
+    if (i != ctab->rows - 1)
+      cchstr_append(&full, '\n');
+  }
+  char *path = malloc(ctab->filename.len + 1);
+  memcpy(path, ctab->filename.str, ctab->filename.len);
+  path[ctab->filename.len] = '\0';
+  int fd = open(path, O_WRONLY | O_TRUNC | O_CREAT, 0644);
+  write(fd, full.str, full.len);
+  close(fd);
+}
 void clamp_cursor() {
   switch (run_data.mode) {
   case view:
@@ -166,24 +181,25 @@ void place_char(char c) {
   struct tab *ctab = &(run_data.tabs[run_data.c_tab]);
 
   if (c == KEY_ENTER) {
-      cstring *cur_line = &ctab->lines[c_abrow];
-      cstring tail = CSTRING_INIT;
-      if (c_abcol < cur_line->len) {
-        cpstr_append(&tail, cur_line->str + c_abcol, cur_line->len - c_abcol);
-        cur_line->len = c_abcol;
-      }
-      ctab->lines = realloc(ctab->lines, sizeof(cstring) * (ctab->rows + 1));
-      ctab->line_scroll = realloc(ctab->line_scroll, sizeof(int) * (ctab->rows + 1));
-      memmove(ctab->lines + c_abrow + 1, ctab->lines + c_abrow,
-              sizeof(cstring) * (ctab->rows - c_abrow));
-      memmove(ctab->line_scroll + c_abrow + 1, ctab->line_scroll + c_abrow,
-              sizeof(int) * (ctab->rows - c_abrow));
-      ctab->lines[c_abrow + 1] = tail;
-      ctab->line_scroll[c_abrow + 1] = 0;
-      ctab->rows++;
-      run_data.crows++;
-      run_data.ccols = run_data.col_lbound;
-    } else if (c == KEY_BACKSPACE) {
+    cstring *cur_line = &ctab->lines[c_abrow];
+    cstring tail = CSTRING_INIT;
+    if (c_abcol < cur_line->len) {
+      cpstr_append(&tail, cur_line->str + c_abcol, cur_line->len - c_abcol);
+      cur_line->len = c_abcol;
+    }
+    ctab->lines = realloc(ctab->lines, sizeof(cstring) * (ctab->rows + 1));
+    ctab->line_scroll =
+        realloc(ctab->line_scroll, sizeof(int) * (ctab->rows + 1));
+    memmove(ctab->lines + c_abrow + 1, ctab->lines + c_abrow,
+            sizeof(cstring) * (ctab->rows - c_abrow));
+    memmove(ctab->line_scroll + c_abrow + 1, ctab->line_scroll + c_abrow,
+            sizeof(int) * (ctab->rows - c_abrow));
+    ctab->lines[c_abrow + 1] = tail;
+    ctab->line_scroll[c_abrow + 1] = 0;
+    ctab->rows++;
+    run_data.crows += 2;
+    run_data.ccols = run_data.col_lbound;
+  } else if (c == KEY_BACKSPACE) {
     if (c_abcol > 0) {
       cstring *line = &ctab->lines[c_abrow];
       memmove(line->str + c_abcol - 1, line->str + c_abcol,
@@ -269,6 +285,14 @@ void process_input() {
   case CK('b'):
     run_data.mode = view;
     break;
+  case CK('s'):
+    write_file();
+    break;
+  case CK('I'):
+    for (int i = 0; i < 4; i++) {
+      place_char(' ');
+    }
+    break;
   default:
     if (run_data.mode == edit) {
       place_char(key);
@@ -293,7 +317,8 @@ void draw_lines(cstring *ab, int *rows_left, int *row) {
     cchstr_append(&full, run_data.staticconf.line_char);
     cchstr_append(&full, ' ');
     ccstr_append(&full, &(ctab->lines[lineidx]));
-    if (run_data.cols > 2 && full.len > (unsigned)(run_data.cols - 2)) {
+    int vlen = cstrvislen(&full);
+    if (run_data.cols > 2 && vlen > (unsigned)(run_data.cols - 2)) {
       if (!run_data.staticconf.wordwrap) {
         int prefix_len = max_idxlen + 4;
         int suffix_len = 1;
@@ -325,7 +350,7 @@ void draw_lines(cstring *ab, int *rows_left, int *row) {
           (*row)++;
         }
       } else {
-        int div = full.len / run_data.cols;
+        int div = vlen / run_data.cols;
         for (int cd = 0; cd < div && *rows_left > 0; cd++) {
           cstring frac = CSTRING_INIT;
           getrange(&full, run_data.cols, cd * run_data.cols, &frac);
@@ -334,7 +359,7 @@ void draw_lines(cstring *ab, int *rows_left, int *row) {
           (*rows_left)--;
           (*row)++;
         }
-        int remainder = full.len % run_data.cols;
+        int remainder = vlen % run_data.cols;
         if (remainder > 0 && *rows_left > 0) {
           cstring frac = CSTRING_INIT;
           getrange(&full, remainder, div * run_data.cols, &frac);
@@ -355,6 +380,7 @@ void draw_lines(cstring *ab, int *rows_left, int *row) {
 }
 void draw_top(cstring *ab, int *rows_left, int *row) {
   cstring full = CSTRING_INIT;
+
   for (int i = 0; i < run_data.tabs_n; i++) {
     if (i == run_data.c_tab) {
       cpstr_append(&full, "-->", 3);
@@ -364,8 +390,9 @@ void draw_top(cstring *ab, int *rows_left, int *row) {
     ccstr_append(&full, &(run_data.tabs[i].filename));
     cpstr_append(&full, "   ", 3);
   }
-  if (full.len > (unsigned)run_data.cols) {
-    int div = full.len / run_data.cols;
+  int vlen = cstrvislen(&full);
+  if (vlen > (unsigned)run_data.cols) {
+    int div = vlen / run_data.cols;
     for (int cd = 0; cd < div && *rows_left > 0; cd++) {
       cstring frac = CSTRING_INIT;
       getrange(&full, run_data.cols, cd * run_data.cols, &frac);
@@ -374,7 +401,7 @@ void draw_top(cstring *ab, int *rows_left, int *row) {
       (*rows_left)--;
       (*row)++;
     }
-    int remainder = full.len % run_data.cols;
+    int remainder = vlen % run_data.cols;
     if (remainder > 0 && *rows_left > 0) {
       cstring frac = CSTRING_INIT;
       getrange(&full, remainder, div * run_data.cols, &frac);
@@ -444,7 +471,7 @@ void draw_viewer() {
     run_data.ccols = run_data.col_lbound;
 
   draw_lines(lines_b, &left, &row);
-  merge_lines(&ab, lines_b,row);
+  merge_lines(&ab, lines_b, row);
 
   char posbuf[32];
   snprintf(posbuf, sizeof(posbuf), "\x1b[%d;%dH", run_data.crows + 1,
