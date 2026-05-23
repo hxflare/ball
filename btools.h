@@ -2,11 +2,18 @@
 #define BTOOLS_H
 #define CSTRING_INIT {NULL, 0}
 typedef enum {
-  undefined = 1024,
-  arrow_up = 1,
-  arrow_right = 2,
-  arrow_left = 3,
-  arrow_down = 4
+
+      KEY_NULL = 0,
+
+      KEY_CTRL_C = 3,
+      KEY_ENTER = 13,
+      KEY_ESC = 27,
+      KEY_BACKSPACE = 127,
+
+      KEY_ARROW_UP = 1000,
+      KEY_ARROW_DOWN,
+      KEY_ARROW_LEFT,
+      KEY_ARROW_RIGHT
 } kkey_t;
 typedef enum {
   white = 37,
@@ -38,4 +45,5 @@ int intlen(int n);
 int getrange(cstring *str, int range, int start, cstring *ret);
 void cstr_replace(int a, int b, cstring *rep, cstring *with);
 void cstcol(cstring *str, ecolor fg, ecolor bg);
+void chcinsert(cstring *str, int idx, char ch);
 #endif

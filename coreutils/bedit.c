@@ -14,10 +14,7 @@
 enum editor_mode {
   view,
   edit,
-  floating_tab,
-  floating_settings,
-  floating_modesel,
-  floating_qact,
+  settings,
   command,
 };
 struct floating_win {
@@ -42,7 +39,6 @@ struct static_editor_config {
   int tab_style;
 };
 struct runtime_data {
-
   int rows;
   int cols;
   int crows;
@@ -68,6 +64,7 @@ void disableRawMode() {
   cprint("\e[1;1H\e[2J");
   cprint("exited\n");
 }
+
 void enableRawMode() {
   atexit(disableRawMode);
   struct termios raw = run_data.orig_termios;
@@ -78,6 +75,60 @@ void enableRawMode() {
   raw.c_cc[VMIN] = 0;
   raw.c_cc[VTIME] = 1;
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+}
+void clamp_start() {
+  int max_start = run_data.tabs[run_data.c_tab].rows - run_data.rows;
+  if (max_start < 0)
+    max_start = 0;
+  if (run_data.tabs[run_data.c_tab].start > max_start)
+    run_data.tabs[run_data.c_tab].start = max_start;
+  if (run_data.tabs[run_data.c_tab].start <0)
+    run_data.tabs[run_data.c_tab].start = 0;
+}
+void clamp_cursor() {
+  switch (run_data.mode) {
+  case view:
+    if (run_data.crows < run_data.row_ubound) {
+      run_data.crows = run_data.row_ubound;
+      if (run_data.tabs[run_data.c_tab].start > 0)
+              run_data.tabs[run_data.c_tab].start--;
+    } else if (run_data.crows > run_data.row_dbound - 1) {
+      run_data.crows = run_data.row_dbound - 1;
+      run_data.tabs[run_data.c_tab].start++;
+    }
+    if (run_data.ccols < run_data.col_lbound) {
+      run_data.ccols = run_data.col_lbound;
+    } else if (run_data.ccols > run_data.col_rbound - 1) {
+      run_data.ccols = run_data.col_rbound - 1;
+    }
+    break;
+  case edit:
+    if (run_data.crows < run_data.row_ubound) {
+      run_data.crows = run_data.row_ubound;
+      run_data.tabs[run_data.c_tab].start--;
+    } else if (run_data.crows > run_data.row_dbound - 1) {
+      run_data.crows = run_data.row_dbound - 1;
+      run_data.tabs[run_data.c_tab].start++;
+    }
+    if (run_data.ccols < run_data.col_lbound) {
+      run_data.ccols = run_data.col_lbound;
+    } else if (run_data.ccols >
+               run_data.col_lbound +
+                   run_data.tabs[run_data.c_tab]
+                       .lines[run_data.tabs[run_data.c_tab].start -
+                              run_data.row_ubound]
+                       .len -
+                   1) {
+      run_data.ccols =
+          run_data.col_lbound +
+          run_data.tabs[run_data.c_tab]
+              .lines[run_data.tabs[run_data.c_tab].start - run_data.row_ubound]
+              .len -
+          1;
+    }
+    break;
+  }
+  clamp_start();
 }
 void cmove(char key) {
   switch (key) {
@@ -94,111 +145,79 @@ void cmove(char key) {
     run_data.crows++;
     break;
   }
-  if (run_data.crows > run_data.row_dbound - 1) {
-    run_data.crows = run_data.row_dbound - 1;
-    run_data.tabs[run_data.c_tab].start++;
-  }
-  if (run_data.ccols > run_data.col_rbound - 1) {
-    run_data.ccols = run_data.col_rbound - 1;
-  }
-  if (run_data.crows < run_data.row_ubound) {
-    run_data.crows = run_data.row_ubound;
-    run_data.tabs[run_data.c_tab].start--;
-  }
-  if (run_data.ccols < run_data.col_lbound) {
-    run_data.ccols = run_data.col_lbound;
-  }
-  if (run_data.tabs[run_data.c_tab].start < 0)
-    run_data.tabs[run_data.c_tab].start = 0;
-  int max_start = run_data.tabs[run_data.c_tab].rows - run_data.rows;
-  if (max_start < 0)
-    max_start = 0;
-  if (run_data.tabs[run_data.c_tab].start > max_start)
-    run_data.tabs[run_data.c_tab].start = max_start;
+  clamp_cursor();
 }
-/*
-struct floating_win *man_floating() {
-  struct floating_win *win = run_data.window;
-  if (run_data.mode == view || run_data.mode == command ||
-      run_data.mode == edit) {
-    return NULL;
-  }
-  if (win == NULL) {
-    win = calloc(1, sizeof(struct floating_win));
-    win->c_choice = 0;
-    win->start = 0;
-    win->title = (cstring)CSTRING_INIT;
+void place_char(char c, cstring *ab) {
+  int c_abrow = run_data.tabs[run_data.c_tab].start + run_data.crows -
+                run_data.row_ubound;
+  int c_abcol = run_data.ccols - run_data.col_lbound;
+  if (c == '\n') {
+    // insert another line
+    run_data.tabs[run_data.c_tab].lines =
+        realloc(run_data.tabs[run_data.c_tab].lines,
+                sizeof(cstring) * (run_data.tabs[run_data.c_tab].rows + 1));
+    memmove(run_data.tabs[run_data.c_tab].lines + c_abrow + 1,
+            run_data.tabs[run_data.c_tab].lines + c_abrow,
+            sizeof(cstring) * (run_data.tabs[run_data.c_tab].rows - c_abrow));
+    run_data.tabs[run_data.c_tab].lines[c_abrow + 1] = (cstring)CSTRING_INIT;
+    run_data.tabs[run_data.c_tab].rows++;
   } else {
-    for (int i = 0; i < win->n; i++) {
-      cstr_free(&(win->choices[i]));
+    chcinsert(&(run_data.tabs[run_data.c_tab].lines[c_abrow]), c_abcol, c);
+  }
+}
+void exit_clean() { exit(0); };
+int read_key() {
+  char c;
+  if (read(STDIN_FILENO, &c, 1) != 1)
+    return KEY_NULL;
+  if (c != '\x1b')
+    return c;
+  char seq[2];
+  if (read(STDIN_FILENO, &seq[0], 1) != 1)
+    return KEY_ESC;
+  if (read(STDIN_FILENO, &seq[1], 1) != 1)
+    return KEY_ESC;
+  if (seq[0] == '[') {
+    switch (seq[1]) {
+    case 'A':
+      return KEY_ARROW_UP;
+    case 'B':
+      return KEY_ARROW_DOWN;
+    case 'C':
+      return KEY_ARROW_RIGHT;
+    case 'D':
+      return KEY_ARROW_LEFT;
     }
-    win->n = 0;
-    free(win->choices);
-    win->choices = NULL;
-    cstr_free(&(win->title));
-    win->title = (cstring)CSTRING_INIT;
   }
-  switch (run_data.mode) {
-  case floating_tab:
-    goto tab_switch;
-    break;
-  case floating_settings:
-    goto settings;
-    break;
-  case floating_modesel:
-    goto mode;
-    break;
-  default:
-    free(win);
-    return NULL;
-  }
-tab_switch:
-  cpstr_append(&(win->title), "Tabs", 4);
-  win->choices = calloc(run_data.tabs_n, sizeof(cstring));
-  for (int i = 0; i < run_data.tabs_n; i++) {
-    win->choices[i] = (cstring)CSTRING_INIT;
-    ccstr_append(&(win->choices[i]), &(run_data.tabs[i].filename));
-    win->n++;
-  }
-  return win;
-settings:
-  win->choices = calloc(3, sizeof(cstring));
-  win->n = 3;
-  cpstr_append(&(win->title), "Conf", 4);
-  win->choices[0] = (cstring)CSTRING_INIT;
-  cpstr_append(&(win->choices[0]), "gutter ", 7);
-  cchstr_append(&(win->choices[0]), run_data.staticconf.line_char);
-  win->choices[1] = (cstring)CSTRING_INIT;
-  cpstr_append(&(win->choices[1]), "ww ", 3);
-  if (run_data.staticconf.wordwrap) {
-    cchstr_append(&(win->choices[1]), '+');
-  } else {
-    cchstr_append(&(win->choices[1]), '-');
-  }
-  win->choices[2] = (cstring)CSTRING_INIT;
-  cpstr_append(&(win->choices[2]), "ts ", 3);
-  if (run_data.staticconf.tab_style) {
-    cpstr_append(&(win->choices[2]), "win", 3);
-  } else {
-    cpstr_append(&(win->choices[2]), "bar", 3);
-  }
-  return win;
-mode:
-  win->choices = calloc(4, sizeof(cstring));
-  win->n = 4;
-  cpstr_append(&(win->title), "Mode", 4);
-  win->choices[0] = (cstring)CSTRING_INIT;
-  cpstr_append(&(win->choices[0]), "view", 4);
-  win->choices[1] = (cstring)CSTRING_INIT;
-  cpstr_append(&(win->choices[1]), "edit", 4);
-  win->choices[2] = (cstring)CSTRING_INIT;
-  cpstr_append(&(win->choices[2]), "comm", 4);
-  win->choices[3] = (cstring)CSTRING_INIT;
-  cpstr_append(&(win->choices[3]), "conf", 4);
-  return win;
-  } */
+  return 0;
+}
 void process_input() {
-
+  clamp_cursor();
+  int key = read_key();
+  switch (key) {
+  case CK('x'):
+    exit_clean();
+    break;
+  case KEY_ARROW_UP:
+    cmove('w');
+    break;
+  case KEY_ARROW_DOWN:
+    cmove('s');
+    break;
+  case KEY_ARROW_LEFT:
+    cmove('a');
+    break;
+  case KEY_ARROW_RIGHT:
+    cmove('d');
+    break;
+  case CK('I'):
+    run_data.c_tab++;
+    if (run_data.c_tab >= run_data.tabs_n) {
+      run_data.c_tab = 0;
+    }
+    break;
+  }
+  clamp_cursor();
 }
 void draw_lines(cstring *ab, int *rows_left, int *row) {
   int max_idxlen = intlen(run_data.tabs[run_data.c_tab].rows);
@@ -317,49 +336,6 @@ void draw_top(cstring *ab, int *rows_left, int *row) {
 
   run_data.row_ubound = *row;
 }
-/*
-void draw_win(cstring *ab, struct floating_win *win) {
-  if (win == NULL)
-    return;
-  int maxlen = 0;
-  for (int i = 0; i < win->n; i++) {
-    if ((int)win->choices[i].len > maxlen) {
-      maxlen = win->choices[i].len;
-    }
-  }
-  cstring *lines = calloc(win->n + 2, sizeof(cstring));
-  if (run_data.cols < maxlen + 2 || run_data.rows < win->n + 2) {
-    free(lines);
-    return;
-  }
-  for (int i = 0; i < maxlen + 2; i++) {
-    cchstr_append(&(lines[0]), '-');
-    cchstr_append(&(lines[win->n + 1]), '-');
-  }
-  for (int i = 1; i <= win->n; i++) {
-    cchstr_append(&(lines[i]), ' ');
-    ccstr_append(&(lines[i]), &(win->choices[i - 1]));
-    for (int j = win->choices[i - 1].len + 1; j < maxlen; j++) {
-      cchstr_append(&(lines[i]), ' ');
-    }
-  }
-  int start_row = run_data.rows / 2 - (win->n + 2) / 2;
-  int start_col = run_data.cols / 2 - (maxlen + 2) / 2;
-  if (start_row < 0)
-    start_row = 0;
-  if (start_col < 0)
-    start_col = 0;
-  for (int i = 0; i < win->n + 2; i++) {
-    if (i + start_row >= run_data.rows)
-      break;
-    cstr_replace(start_col, start_col + maxlen + 2, &(ab[i + start_row]),
-                 &(lines[i]));
-  }
-  for (int i = 0; i < win->n + 2; i++) {
-    cstr_free(&(lines[i]));
-  }
-  free(lines);
-  } */
 void merge_lines(cstring *ab, cstring *lines) {
   for (int i = 0; i < run_data.rows; i++) {
     ccstr_append(ab, &(lines[i]));
@@ -369,7 +345,7 @@ void merge_lines(cstring *ab, cstring *lines) {
     }
   }
 }
-void refresh() {
+void draw_viewer() {
   if (run_data.tabs_n == 0)
     return;
   run_data.col_rbound = run_data.cols;
@@ -378,7 +354,6 @@ void refresh() {
   } else {
     run_data.row_dbound = run_data.rows;
   }
-  //run_data.window = man_floating();
   int max_idxlen = intlen(run_data.tabs[run_data.c_tab].rows);
   run_data.col_lbound = 3 + max_idxlen;
   int left = run_data.rows;
@@ -394,7 +369,6 @@ void refresh() {
     draw_top(lines_b, &left, &row);
   }
   draw_lines(lines_b, &left, &row);
-  //draw_win(lines_b, run_data.window);
   merge_lines(&ab, lines_b);
 
   char posbuf[32];
@@ -403,12 +377,19 @@ void refresh() {
   cpstr_append(&ab, posbuf, strlen(posbuf));
   cpstr_append(&ab, "\x1b[?25h", 6);
   write(STDOUT_FILENO, ab.str, ab.len);
-  cmove('n');
+  clamp_cursor();
   cstr_free(&ab);
   for (int i = 0; i < run_data.rows; i++) {
     cstr_free(&(lines_b[i]));
   }
   free(lines_b);
+}
+void draw_settings() { return; };
+void refresh() {
+  if (run_data.mode == settings)
+    draw_settings();
+  else
+    draw_viewer();
 }
 void read_lines(cstring filename, struct tab *out) {
   char *path = malloc(filename.len + 1);

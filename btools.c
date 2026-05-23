@@ -185,3 +185,10 @@ int getrange(cstring *str, int range, int start, cstring *ret) {
   *ret = (cstring){new, range};
   return 1;
 }
+void chcinsert(cstring *str, int idx, char ch) {
+  char *newbuf = realloc(str->str, str->len + 1);
+  str->str = newbuf;
+  memmove(str->str + idx + 1, str->str + idx, str->len - idx);
+  str->str[idx] = ch;
+  str->len++;
+}

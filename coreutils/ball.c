@@ -489,16 +489,16 @@ void loop(shellConf config) {
       if (seq[0] == '[') {
         switch (seq[1]) {
         case 'A':
-          key = arrow_up;
+          key = KEY_ARROW_UP;
           break;
         case 'B':
-          key = arrow_down;
+          key = KEY_ARROW_DOWN;
           break;
         case 'C':
-          key = arrow_right;
+          key = KEY_ARROW_RIGHT;
           break;
         case 'D':
-          key = arrow_left;
+          key = KEY_ARROW_LEFT;
           break;
         }
       }
