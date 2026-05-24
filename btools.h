@@ -13,7 +13,11 @@ typedef enum {
       KEY_ARROW_UP = 1000,
       KEY_ARROW_DOWN,
       KEY_ARROW_LEFT,
-      KEY_ARROW_RIGHT
+      KEY_ARROW_RIGHT,
+      KEY_CTRL_ARROW_LEFT,
+      KEY_CTRL_ARROW_RIGHT,
+      KEY_CTRL_ARROW_UP,
+      KEY_CTRL_ARROW_DOWN
 } kkey_t;
 typedef enum {
   white = 37,

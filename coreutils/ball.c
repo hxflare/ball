@@ -365,13 +365,14 @@ int execute(char mode, char *execd, shellConf config) {
         }
       } else if (forked == -1) {
         cprint("fork failed\n");
-      } else {
+      } else if (order[i].type != background) {
         if (waitpid(forked, &status, 0) == -1) {
           cprint("waitpid error\n");
         }
-        disableRawMode();
-        enable_term_rawmode();
       }
+      disableRawMode();
+      enable_term_rawmode();
+
       i++;
     }
     break;

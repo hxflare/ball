@@ -159,6 +159,10 @@ void clamp_cursor() {
   clamp_start();
 }
 void cmove(char key) {
+  struct tab *ctab = &(run_data.tabs[run_data.c_tab]);
+  int c_abrow = run_data.crows + ctab->start - run_data.row_ubound;
+  int c_abcol = run_data.ccols - run_data.col_lbound;
+  cstring *cline = &(ctab->lines[c_abrow]);
   switch (key) {
   case 'a':
     run_data.ccols--;
@@ -171,6 +175,24 @@ void cmove(char key) {
     break;
   case 's':
     run_data.crows++;
+    break;
+  case CK('a'):
+    int i_a = c_abcol - 1;
+    while (cline->str[i_a] != ' ') {
+      if (i_a < 0)
+        break;
+      i_a--;
+      run_data.ccols--;
+    }
+    break;
+  case CK('d'):
+    int i_d = c_abcol + 1;
+    while (cline->str[i_d] != ' ') {
+      if (i_d < 0)
+        break;
+      i_d++;
+      run_data.ccols++;
+    }
     break;
   }
   clamp_cursor();
@@ -232,12 +254,40 @@ int read_key() {
     return KEY_NULL;
   if (c != '\x1b')
     return c;
-  char seq[2];
-  if (read(STDIN_FILENO, &seq[0], 1) != 1)
+
+  char seq[8];
+  int seq_len = 0;
+
+  while (seq_len < (int)sizeof(seq) - 1) {
+    if (read(STDIN_FILENO, &seq[seq_len], 1) != 1)
+      break;
+    seq_len++;
+    char last = seq[seq_len - 1];
+    if ((last >= 'A' && last <= 'Z') || (last >= 'a' && last <= 'z') ||
+        last == '~')
+      break;
+  }
+  seq[seq_len] = '\0';
+
+  if (seq_len == 0)
     return KEY_ESC;
-  if (read(STDIN_FILENO, &seq[1], 1) != 1)
-    return KEY_ESC;
+
   if (seq[0] == '[') {
+    if (seq_len >= 5 && seq[1] == '1' && seq[2] == ';') {
+      int modifier = seq[3] - '0';
+      if (modifier == 5) {
+        switch (seq[4]) {
+        case 'A':
+          return KEY_CTRL_ARROW_UP;
+        case 'B':
+          return KEY_CTRL_ARROW_DOWN;
+        case 'C':
+          return KEY_CTRL_ARROW_RIGHT;
+        case 'D':
+          return KEY_CTRL_ARROW_LEFT;
+        }
+      }
+    }
     switch (seq[1]) {
     case 'A':
       return KEY_ARROW_UP;
@@ -249,7 +299,7 @@ int read_key() {
       return KEY_ARROW_LEFT;
     }
   }
-  return 0;
+  return KEY_ESC;
 }
 void process_input() {
   clamp_cursor();
@@ -271,6 +321,12 @@ void process_input() {
     break;
   case KEY_ARROW_RIGHT:
     cmove('d');
+    break;
+  case KEY_CTRL_ARROW_LEFT:
+    cmove(CK('a'));
+    break;
+  case KEY_CTRL_ARROW_RIGHT:
+    cmove(CK('d'));
     break;
   case CK('t'):
     if (run_data.c_tab >= run_data.tabs_n - 1) {
