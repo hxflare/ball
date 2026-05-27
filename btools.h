@@ -3,21 +3,21 @@
 #define CSTRING_INIT {NULL, 0}
 typedef enum {
 
-      KEY_NULL = 0,
+  KEY_NULL = 0,
 
-      KEY_CTRL_C = 3,
-      KEY_ENTER = 13,
-      KEY_ESC = 27,
-      KEY_BACKSPACE = 127,
+  KEY_CTRL_C = 3,
+  KEY_ENTER = 13,
+  KEY_ESC = 27,
+  KEY_BACKSPACE = 127,
 
-      KEY_ARROW_UP = 1000,
-      KEY_ARROW_DOWN,
-      KEY_ARROW_LEFT,
-      KEY_ARROW_RIGHT,
-      KEY_CTRL_ARROW_LEFT,
-      KEY_CTRL_ARROW_RIGHT,
-      KEY_CTRL_ARROW_UP,
-      KEY_CTRL_ARROW_DOWN
+  KEY_ARROW_UP = 1000,
+  KEY_ARROW_DOWN,
+  KEY_ARROW_LEFT,
+  KEY_ARROW_RIGHT,
+  KEY_CTRL_ARROW_LEFT,
+  KEY_CTRL_ARROW_RIGHT,
+  KEY_CTRL_ARROW_UP,
+  KEY_CTRL_ARROW_DOWN
 } kkey_t;
 typedef enum {
   white = 37,
@@ -33,6 +33,10 @@ typedef struct cstring {
   char *str;
   int len;
 } cstring;
+typedef struct cstring_da {
+  cstring *strs;
+  int n;
+}cstring_da;
 void cstr_free(cstring *str);
 void cpstr_append(cstring *main, char *app, int len);
 void ccstr_append(cstring *main, cstring *app);

@@ -210,3 +210,14 @@ int cstrvislen(cstring *str) {
   }
   return vlen;
 }
+void csta_append(cstring_da *array, cstring *str) {
+  array->n++;
+  array->strs = realloc(array->strs, sizeof(cstring) * array->n);
+  array->strs[array->n - 1] = *str;
+}
+void csta_pop(cstring_da *array, int pop_idx) {
+  memmove(array->strs + pop_idx, array + pop_idx,
+          sizeof(cstring) * (unsigned)(pop_idx - array->n));
+  array->n--;
+  array->strs=realloc(array->strs, sizeof(cstring)*array->n);
+}
