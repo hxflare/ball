@@ -219,5 +219,12 @@ void csta_pop(cstring_da *array, int pop_idx) {
   memmove(array->strs + pop_idx, array + pop_idx,
           sizeof(cstring) * (unsigned)(pop_idx - array->n));
   array->n--;
-  array->strs=realloc(array->strs, sizeof(cstring)*array->n);
+  array->strs = realloc(array->strs, sizeof(cstring) * array->n);
+}
+void csta_insert(cstring_da *array, cstring *str, int idx) {
+  array->n++;
+  array->strs = realloc(array->strs, sizeof(cstring) * array->n);
+  memmove(array->strs + idx + 1, array->strs + idx,
+          sizeof(cstring) * (unsigned)(idx - array->n));
+  array->strs[idx]=*str;
 }

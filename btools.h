@@ -36,7 +36,7 @@ typedef struct cstring {
 typedef struct cstring_da {
   cstring *strs;
   int n;
-}cstring_da;
+} cstring_da;
 void cstr_free(cstring *str);
 void cpstr_append(cstring *main, char *app, int len);
 void ccstr_append(cstring *main, cstring *app);
@@ -55,4 +55,6 @@ void cstr_replace(int a, int b, cstring *rep, cstring *with);
 void cstcol(cstring *str, ecolor fg, ecolor bg);
 void chcinsert(cstring *str, int idx, char ch);
 int cstrvislen(cstring *str);
+void csta_pop(cstring_da *array, int pop_idx);
+void csta_append(cstring_da *array, cstring *str);
 #endif
