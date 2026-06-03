@@ -57,4 +57,5 @@ void chcinsert(cstring *str, int idx, char ch);
 int cstrvislen(cstring *str);
 void csta_pop(cstring_da *array, int pop_idx);
 void csta_append(cstring_da *array, cstring *str);
+void csta_insert(cstring_da *array, cstring *str, int idx);
 #endif
