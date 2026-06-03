@@ -78,7 +78,6 @@ cstring *cb_get_idx(int idx) {
   write(server_socket, &request, sizeof(request));
   read(server_socket, s_str, sizeof(cstring));
   return s_str;
-  return NULL;
 }
 cstring *cb_get_cur() {
   cstring *s_str = calloc(1, sizeof(cstring));
@@ -90,7 +89,6 @@ cstring *cb_get_cur() {
   write(server_socket, &request, sizeof(request));
   read(server_socket, s_str, sizeof(cstring));
   return s_str;
-  return NULL;
 }
 struct clipboard *cb_get_all() {
   struct clipboard *cb = calloc(1, sizeof(struct clipboard));
@@ -98,11 +96,10 @@ struct clipboard *cb_get_all() {
   int server_socket = connect_cb_sock();
   request.req_int = 0;
   request.req_str = (cstring)CSTRING_INIT;
-  request.type = GET_CUR;
+  request.type = GET_ALL;
   write(server_socket, &request, sizeof(request));
   read(server_socket, cb, sizeof(struct clipboard));
   return cb;
-  return NULL;
 }
 void cb_copy(cstring copied) {
   int server_socket = connect_cb_sock();
