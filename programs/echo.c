@@ -7,12 +7,25 @@ static void print_unescaped(const char *s) {
     if (s[0] == '\\' && s[1] != '\0') {
       s++;
       switch (*s) {
-        case 'e':  write(1, "\x1b", 1); break;
-        case 'n':  write(1, "\n",   1); break;
-        case 't':  write(1, "\t",   1); break;
-        case 'r':  write(1, "\r",   1); break;
-        case '\\': write(1, "\\",   1); break;
-        default:   write(1, "\\",   1); write(1, s, 1); break;
+      case 'e':
+        write(1, "\x1b", 1);
+        break;
+      case 'n':
+        write(1, "\n", 1);
+        break;
+      case 't':
+        write(1, "\t", 1);
+        break;
+      case 'r':
+        write(1, "\r", 1);
+        break;
+      case '\\':
+        write(1, "\\", 1);
+        break;
+      default:
+        write(1, "\\", 1);
+        write(1, s, 1);
+        break;
       }
     } else {
       write(1, s, 1);
@@ -35,5 +48,6 @@ int main(int argc, char *argv[]) {
   if (newline) {
     cprint("\n");
   }
+  setcol(white, black);
   return 0;
 }

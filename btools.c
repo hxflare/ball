@@ -177,6 +177,11 @@ void cstcol(cstring *str, ecolor fg, ecolor bg) {
   int len = sprintf(color_esc, "\x1b[%i;%im", fg, bg + 10);
   cpstr_append(str, color_esc, len);
 }
+void setcol(ecolor fg, ecolor bg) {
+  char color_esc[16];
+  int len = sprintf(color_esc, "\x1b[%i;%im", fg, bg + 10);
+  write(1, color_esc, len);
+}
 int getrange(cstring *str, int range, int start, cstring *ret) {
   if (str->len < start + range)
     return 0;

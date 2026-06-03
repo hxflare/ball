@@ -53,6 +53,7 @@ int intlen(int n);
 int getrange(cstring *str, int range, int start, cstring *ret);
 void cstr_replace(int a, int b, cstring *rep, cstring *with);
 void cstcol(cstring *str, ecolor fg, ecolor bg);
+void setcol(ecolor fg, ecolor bg);
 void chcinsert(cstring *str, int idx, char ch);
 int cstrvislen(cstring *str);
 void csta_pop(cstring_da *array, int pop_idx);
