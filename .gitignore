@@ -50,3 +50,5 @@ building/isoroot/initramfs/bin/compileall.sh
 building/isoroot/initramfs/bin/copy
 building/isoroot/initramfs/bin/reboot
 building/isoroot/initramfs/bin/shutdown
+programs/getcb
+building/isoroot/initramfs/bin/getcb

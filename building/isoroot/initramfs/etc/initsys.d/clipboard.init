@@ -1,8 +1,8 @@
 !type
 @command
 !after
-shell.init
+welcome.init
 !before
-
+shell.init
 !functional
-/bin/cbd &
+/bin/cbd
