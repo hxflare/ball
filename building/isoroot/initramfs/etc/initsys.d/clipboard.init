@@ -1,0 +1,8 @@
+!type
+@command
+!after
+shell.init
+!before
+
+!functional
+/bin/cbd &
