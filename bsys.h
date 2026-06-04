@@ -27,7 +27,6 @@ struct login_data {
 };
 // clipboard
 int cb_init_server();
-void cb_start_listen_loop(int fd);
 cstring *cb_get_cur();
 cstring *cb_get_idx(int idx);
 void cb_listen_loop(int fd, struct clipboard *clip);

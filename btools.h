@@ -1,15 +1,13 @@
 #ifndef BTOOLS_H
 #define BTOOLS_H
 #define CSTRING_INIT {NULL, 0}
+#define CSTRING_DA_INIT {NULL, 0}
 typedef enum {
-
   KEY_NULL = 0,
-
   KEY_CTRL_C = 3,
   KEY_ENTER = 13,
   KEY_ESC = 27,
   KEY_BACKSPACE = 127,
-
   KEY_ARROW_UP = 1000,
   KEY_ARROW_DOWN,
   KEY_ARROW_LEFT,

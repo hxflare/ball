@@ -6,7 +6,6 @@
 #include <sys/un.h>
 #include <unistd.h>
 int connect_cb_sock() {
-
   int server_socket;
   struct sockaddr_un server_addr;
   server_socket = socket(AF_UNIX, SOCK_STREAM, 0);
