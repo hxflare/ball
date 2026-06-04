@@ -282,7 +282,7 @@ void execute_service(Service *service) {
         exit(EXIT_FAILURE);
       } else if (fork_pid == -1) {
         cprint("fork failed\n");
-      } else {
+      } else if (service->before_count > 0) {
         int status;
         waitpid(fork_pid, &status, 0);
       }
@@ -311,7 +311,7 @@ void execute_service(Service *service) {
         exit(EXIT_FAILURE);
       } else if (fork_pid == -1) {
         cprint("fork failed\n");
-      } else {
+      } else if (service->before_count > 0) {
         int status;
         waitpid(fork_pid, &status, 0);
       }

@@ -41,3 +41,12 @@ programs/test
 building/isoroot/initramfs/bin/initsys.c�M
 programs/initsys.c�M
 building/isoroot/initrd.img
+programs/shutdown
+programs/reboot
+programs/copy
+programs/cbd
+building/isoroot/initramfs/bin/cbd
+building/isoroot/initramfs/bin/compileall.sh
+building/isoroot/initramfs/bin/copy
+building/isoroot/initramfs/bin/reboot
+building/isoroot/initramfs/bin/shutdown
