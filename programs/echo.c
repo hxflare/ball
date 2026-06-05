@@ -33,7 +33,7 @@ static void print_unescaped(const char *s) {
     s++;
   }
 }
-int main(int argc, char *argv[]) {
+int main(int argc, char **argv) {
   int newline = 1;
   for (int i = 1; i < argc; i++) {
     if (strcmp(argv[i], "-n") == 0) {
@@ -48,6 +48,6 @@ int main(int argc, char *argv[]) {
   if (newline) {
     cprint("\n");
   }
-  setcol(white, black);
+  //setcol(white, black);
   return 0;
 }

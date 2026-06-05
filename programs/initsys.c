@@ -274,7 +274,6 @@ void execute_service(Service *service) {
     int i = 0;
     while (service->functional[i][0] != '\0') {
       fork_pid = fork();
-
       if (fork_pid == 0) {
         char *args[] = {service->functional[i], NULL};
         execve(service->functional[i], args, environ);
