@@ -187,23 +187,23 @@ Service parse_service(char *service_name) {
         cur_line++;
         while (cur_line < amm && lines[cur_line][0] != '!') {
           if (lines[cur_line][0] == '@') {
-            strncpy(service.after[count], lines[cur_line] + 1, 64);
-            count++;
-          }
-          cur_line++;
-        }
-        service.after_count = count;
-      } else if (strcmp(lines[cur_line] + 1, "before") == 0) {
-        int count = 0;
-        cur_line++;
-        while (cur_line < amm && lines[cur_line][0] != '!') {
-          if (lines[cur_line][0] == '@') {
             strncpy(service.before[count], lines[cur_line] + 1, 64);
             count++;
           }
           cur_line++;
         }
         service.before_count = count;
+      } else if (strcmp(lines[cur_line] + 1, "before") == 0) {
+        int count = 0;
+        cur_line++;
+        while (cur_line < amm && lines[cur_line][0] != '!') {
+          if (lines[cur_line][0] == '@') {
+            strncpy(service.after[count], lines[cur_line] + 1, 64);
+            count++;
+          }
+          cur_line++;
+        }
+        service.after_count = count;
       } else if (strcmp(lines[cur_line] + 1, "type") == 0) {
         cur_line++;
         while (cur_line < amm && lines[cur_line][0] != '!') {
