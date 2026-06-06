@@ -47,6 +47,12 @@ void cchstr_append(cstring *main, char app) {
   main->len++;
   main->str = new;
 }
+void chcdelete(cstring *str, int idx) {
+  memmove(str->str + idx, str->str + idx + 1, str->len - idx - 1);
+  str->len--;
+  char *newbuf = realloc(str->str, str->len);
+  str->str = newbuf;
+}
 void int_to_cstr(int n, cstring *str) {
   if (n == 0) {
     cchstr_append(str, '0');
