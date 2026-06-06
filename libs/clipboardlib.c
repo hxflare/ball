@@ -34,8 +34,11 @@ int connect_cb_sock() {
   server_socket = socket(AF_UNIX, SOCK_STREAM, 0);
   server_addr.sun_family = AF_UNIX;
   strcpy(server_addr.sun_path, CLIPBOARD_SOCK_NAME);
-  int res = connect(server_socket, (struct sockaddr *)&server_addr,
-                    sizeof(server_addr));
+  if (connect(server_socket, (struct sockaddr *)&server_addr,
+              sizeof(server_addr)) < 0) {
+    close(server_socket);
+    return -1;
+  }
   return server_socket;
 }
 int cb_init_server() {
@@ -59,20 +62,23 @@ void handle_request(struct cb_request *request, int fd,
   case GET_CUR:
     write_cstring(fd, &(clip->elements.strs[clip->cur]));
     break;
-  case GET_ALL:
+  case GET_ALL: {
     int32_t n = clip->elements.n;
     write(fd, &n, sizeof(n));
     for (int i = 0; i < n; i++)
       write_cstring(fd, &clip->elements.strs[i]);
     break;
-  case ADD_NEW:
+  }
+  case ADD_NEW: {
     cstring nstr = read_cstring(fd);
     csta_insert(&(clip->elements), &(nstr), 0);
     break;
-  case INSERT_AT:
+  }
+  case INSERT_AT: {
     cstring atstr = read_cstring(fd);
     csta_insert(&(clip->elements), &(atstr), request->req_int);
     break;
+  }
   case CHANGE_CUR_IDX:
     clip->cur = request->req_int;
     break;
@@ -102,7 +108,8 @@ cstring *cb_get_idx(int idx) {
   request.req_int = idx;
   request.type = GET_AT;
   write(server_socket, &request, sizeof(request));
-  read_cstring(server_socket);
+  *s_str = read_cstring(server_socket);
+  close(server_socket);
   return s_str;
 }
 cstring *cb_get_cur() {
@@ -112,7 +119,8 @@ cstring *cb_get_cur() {
   request.req_int = 0;
   request.type = GET_CUR;
   write(server_socket, &request, sizeof(request));
-  read_cstring(server_socket);
+  *s_str = read_cstring(server_socket);
+  close(server_socket);
   return s_str;
 }
 struct clipboard *cb_get_all() {
@@ -123,6 +131,7 @@ struct clipboard *cb_get_all() {
   request.type = GET_ALL;
   write(server_socket, &request, sizeof(request));
   read(server_socket, cb, sizeof(struct clipboard));
+  close(server_socket);
   return cb;
 }
 void cb_copy(cstring copied) {
@@ -132,4 +141,5 @@ void cb_copy(cstring copied) {
   request.req_int = 0;
   write(server_socket, &request, sizeof(request));
   write_cstring(server_socket, &copied);
+  close(server_socket);
 }
