@@ -1,3 +1,4 @@
+shell init
 !after
 @clear.init
 !before
