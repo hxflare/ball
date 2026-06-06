@@ -317,6 +317,23 @@ void execute_service(Service *service) {
       }
       i++;
     }
+  } else if (strcmp(service->type, "daemon") == 0) {
+    pid_t fork_pid;
+    extern char **environ;
+    int i = 0;
+    while (service->functional[i][0] != '\0') {
+      fork_pid = fork();
+
+      if (fork_pid == 0) {
+        char *args[] = {service->functional[i], NULL};
+        execve(service->functional[i], args, environ);
+        perror("execve failed");
+        exit(EXIT_FAILURE);
+      } else if (fork_pid == -1) {
+        cprint("fork failed\n");
+      }
+      i++;
+    }
   }
 }
 
@@ -351,9 +368,7 @@ int main(int argc, char **argv) {
   service_root[amount].name[0] = '\0';
   int *order = topological_order(service_root, amount);
   for (int i = 0; i < amount; i++) {
-    cprint(service_root[order[i]].name);
-    cprint("\n");
-    // execute_service(&service_root[order[i]]);
+    execute_service(&service_root[order[i]]);
   }
   while (1)
     wait(NULL);
