@@ -176,7 +176,7 @@ void cmove(char key) {
   case 's':
     run_data.crows++;
     break;
-  case CK('a'):
+  case CK('a'): {
     int i_a = c_abcol - 1;
     while (cline->str[i_a] != ' ') {
       if (i_a < 0)
@@ -185,7 +185,8 @@ void cmove(char key) {
       run_data.ccols--;
     }
     break;
-  case CK('d'):
+  }
+  case CK('d'): {
     int i_d = c_abcol + 1;
     while (cline->str[i_d] != ' ') {
       if (i_d < 0)
@@ -194,6 +195,7 @@ void cmove(char key) {
       run_data.ccols++;
     }
     break;
+  }
   }
   clamp_cursor();
 }
@@ -248,59 +250,6 @@ void place_char(char c) {
   clamp_cursor();
 }
 void exit_clean() { exit(0); };
-int read_key() {
-  char c;
-  if (read(STDIN_FILENO, &c, 1) != 1)
-    return KEY_NULL;
-  if (c != '\x1b')
-    return c;
-
-  char seq[8];
-  int seq_len = 0;
-
-  while (seq_len < (int)sizeof(seq) - 1) {
-    if (read(STDIN_FILENO, &seq[seq_len], 1) != 1)
-      break;
-    seq_len++;
-    char last = seq[seq_len - 1];
-    if ((last >= 'A' && last <= 'Z') || (last >= 'a' && last <= 'z') ||
-        last == '~')
-      break;
-  }
-  seq[seq_len] = '\0';
-
-  if (seq_len == 0)
-    return KEY_ESC;
-
-  if (seq[0] == '[') {
-    if (seq_len >= 5 && seq[1] == '1' && seq[2] == ';') {
-      int modifier = seq[3] - '0';
-      if (modifier == 5) {
-        switch (seq[4]) {
-        case 'A':
-          return KEY_CTRL_ARROW_UP;
-        case 'B':
-          return KEY_CTRL_ARROW_DOWN;
-        case 'C':
-          return KEY_CTRL_ARROW_RIGHT;
-        case 'D':
-          return KEY_CTRL_ARROW_LEFT;
-        }
-      }
-    }
-    switch (seq[1]) {
-    case 'A':
-      return KEY_ARROW_UP;
-    case 'B':
-      return KEY_ARROW_DOWN;
-    case 'C':
-      return KEY_ARROW_RIGHT;
-    case 'D':
-      return KEY_ARROW_LEFT;
-    }
-  }
-  return KEY_ESC;
-}
 void process_input() {
   clamp_cursor();
   int key = read_key();
