@@ -98,6 +98,10 @@ int str_isdigit(const char *str) {
   return 1;
 }
 void setcol(ecolor fg, ecolor bg) {
+  if (fg == reset) {
+    cprint("\033[0m");
+    return;
+  }
   char color_esc[16];
   int len = sprintf(color_esc, "\x1b[%i;%im", fg, bg + 10);
   write(1, color_esc, len);

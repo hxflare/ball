@@ -435,7 +435,7 @@ int execute(char mode, char *execd, shellConf config) {
       }
       disableRawMode();
       enable_term_rawmode();
-      setcol(white, black);
+      setcol(reset,reset);
       i++;
     }
     break;

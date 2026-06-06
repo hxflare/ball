@@ -48,6 +48,6 @@ int main(int argc, char **argv) {
   if (newline) {
     cprint("\n");
   }
-  setcol(white, black);
+  setcol(reset, reset);
   return 0;
 }

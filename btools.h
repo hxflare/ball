@@ -25,7 +25,8 @@ typedef enum {
   yellow = 33,
   blue = 34,
   magenta = 35,
-  cyan = 36
+  cyan = 36,
+  reset = 0,
 } ecolor;
 typedef struct cstring {
   char *str;

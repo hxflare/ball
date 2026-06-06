@@ -80,6 +80,10 @@ int intlen(int n) {
   return len;
 }
 void cstcol(cstring *str, ecolor fg, ecolor bg) {
+  if (fg == reset) {
+    cprint("\033[0m");
+    return;
+  }
   char color_esc[16];
   int len = sprintf(color_esc, "\x1b[%i;%im", fg, bg + 10);
   cpstr_append(str, color_esc, len);
