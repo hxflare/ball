@@ -1,4 +1,5 @@
 #include "../btools.h"
+#include <fcntl.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -349,17 +350,40 @@ int execute(char mode, char *execd, shellConf config) {
       int status;
       if (forked == 0) {
         disableRawMode();
+        if (order[i].type == overwrite_file) {
+          int ffd = open(order[i + 1].command, O_CREAT | O_WRONLY | O_TRUNC);
+          dup2(ffd, STDOUT_FILENO);
+          close(ffd);
+        } else if (order[i].type == append_to_file) {
+          int ffd = open(order[i + 1].command, O_CREAT | O_WRONLY);
+          dup2(ffd, STDOUT_FILENO);
+          close(ffd);
+        }
+        if (order[i - 1].type == overwrite_file ||
+            order[i - 1].type == append_to_file) {
+          exit(0);
+        }
         if (strchr(args[0], '/')) {
-          execve(args[0], args, environ);
+          int res = execve(args[0], args, environ);
+          if (res < 0) {
+            cprint("Execution failed. Unknown command: ");
+            cprint(order[i].command);
+          }
           exit(1);
         } else {
           int k = 0;
+          int res = -1;
           while (config.paths[k][0] != '\0') {
             char full_path[512];
             snprintf(full_path, sizeof(full_path), "%s/%s", config.paths[k],
                      args[0]);
-            execve(full_path, args, environ);
+            res = execve(full_path, args, environ);
+
             k++;
+          }
+          if (res < 0) {
+            cprint("Execution failed. Unknown command: ");
+            cprint(order[i].command);
           }
           exit(127);
         }
@@ -372,7 +396,7 @@ int execute(char mode, char *execd, shellConf config) {
       }
       disableRawMode();
       enable_term_rawmode();
-
+      setcol(white, black);
       i++;
     }
     break;
