@@ -8,6 +8,8 @@ int main(int argc, char **argv) {
   }
   cstring full = CSTRING_INIT;
   for (int i = 1; i < argc; i++) {
+    if (i > 1)
+      cchstr_append(&full, ' ');
     cpstr_append(&full, argv[i], strlen(argv[i]));
   }
   cb_copy(full);

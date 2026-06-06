@@ -1,7 +1,7 @@
 #ifndef BSYS_H
 #define BSYS_H
 #include "btools.h"
-#define CLIPBOARD_SOCK_NAME "cboard.sock"
+#define CLIPBOARD_SOCK_NAME "/tmp/cboard.sock"
 #define USERS_DB_PATH "/etc/users"
 struct clipboard {
   cstring_da elements;
