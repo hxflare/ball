@@ -66,10 +66,12 @@ void handle_request(struct cb_request *request, int fd,
       write_cstring(fd, &clip->elements.strs[i]);
     break;
   case ADD_NEW:
-    csta_insert(&(clip->elements), &(request->req_str), 0);
+    cstring nstr = read_cstring(fd);
+    csta_insert(&(clip->elements), &(nstr), 0);
     break;
   case INSERT_AT:
-    csta_insert(&(clip->elements), &(request->req_str), request->req_int);
+    cstring atstr = read_cstring(fd);
+    csta_insert(&(clip->elements), &(atstr), request->req_int);
     break;
   case CHANGE_CUR_IDX:
     clip->cur = request->req_int;
@@ -98,10 +100,9 @@ cstring *cb_get_idx(int idx) {
   struct cb_request request;
   int server_socket = connect_cb_sock();
   request.req_int = idx;
-  request.req_str = (cstring)CSTRING_INIT;
   request.type = GET_AT;
   write(server_socket, &request, sizeof(request));
-  read(server_socket, s_str, sizeof(cstring));
+  read_cstring(server_socket);
   return s_str;
 }
 cstring *cb_get_cur() {
@@ -109,10 +110,9 @@ cstring *cb_get_cur() {
   struct cb_request request;
   int server_socket = connect_cb_sock();
   request.req_int = 0;
-  request.req_str = (cstring)CSTRING_INIT;
   request.type = GET_CUR;
   write(server_socket, &request, sizeof(request));
-  read(server_socket, s_str, sizeof(cstring));
+  read_cstring(server_socket);
   return s_str;
 }
 struct clipboard *cb_get_all() {
@@ -120,7 +120,6 @@ struct clipboard *cb_get_all() {
   struct cb_request request;
   int server_socket = connect_cb_sock();
   request.req_int = 0;
-  request.req_str = (cstring)CSTRING_INIT;
   request.type = GET_ALL;
   write(server_socket, &request, sizeof(request));
   read(server_socket, cb, sizeof(struct clipboard));
@@ -131,6 +130,6 @@ void cb_copy(cstring copied) {
   struct cb_request request;
   request.type = ADD_NEW;
   request.req_int = 0;
-  request.req_str = copied;
   write(server_socket, &request, sizeof(request));
+  write_cstring(server_socket, &copied);
 }

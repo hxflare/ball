@@ -18,7 +18,6 @@ enum cb_req_type {
 };
 struct cb_request {
   enum cb_req_type type;
-  cstring req_str;
   int req_int;
 };
 struct login_data {
