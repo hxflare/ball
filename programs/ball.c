@@ -315,9 +315,23 @@ int execute(char mode, char *execd, shellConf config) {
     exec_batch *order = get_exec_order(execd);
     if (!order)
       return EXIT_FAILURE;
+
     int i = 0;
     int input_fd = 0;
+    int last_exit_status = 0;
+
     while (order[i].command != NULL) {
+      if (i > 0) {
+        exec_types prev_type = order[i - 1].type;
+        if (prev_type == and && last_exit_status != 0) {
+          i++;
+          continue;
+        }
+        if (prev_type == eor && last_exit_status == 0) {
+          i++;
+          continue;
+        }
+      }
       int argc = 0;
       char **args = extract_args(order[i].command, config, &argc);
       if (!args || !args[0] || args[0][0] == '\0') {
@@ -330,11 +344,15 @@ int execute(char mode, char *execd, shellConf config) {
           dir = "/";
         if (chdir(dir) != 0)
           perror("cd");
+        last_exit_status = 0;
         i++;
+        free(args);
         continue;
       } else if (strcmp(args[0], "clear") == 0) {
         cprint("\e[1;1H\e[2J");
+        last_exit_status = 0;
         i++;
+        free(args);
         continue;
       } else if (strcmp(args[0], "exit") == 0) {
         exit(0);
@@ -344,7 +362,15 @@ int execute(char mode, char *execd, shellConf config) {
           *eq = '\0';
           setenv(args[1], eq + 1, 1);
         }
+        last_exit_status = 0;
         i++;
+        free(args);
+        continue;
+      }
+      if (i > 0 && (order[i - 1].type == overwrite_file ||
+                    order[i - 1].type == append_to_file)) {
+        i++;
+        free(args);
         continue;
       }
       int pipefd[2];
@@ -355,65 +381,45 @@ int execute(char mode, char *execd, shellConf config) {
         }
       }
       pid_t forked = fork();
-      int status;
-      int res = 1;
       if (forked == 0) {
         disableRawMode();
         if (input_fd != 0) {
           dup2(input_fd, STDIN_FILENO);
           close(input_fd);
         }
-
-        if (order[i].type == overwrite_file) {
-
-        } else if (order[i].type == append_to_file) {
-
+        if (order[i].type == overwrite_file && order[i + 1].command != NULL) {
+          int ffd =
+              open(order[i + 1].command, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+          if (ffd < 0) {
+            perror("open");
+            exit(1);
+          }
+          dup2(ffd, STDOUT_FILENO);
+          close(ffd);
+        } else if (order[i].type == append_to_file &&
+                   order[i + 1].command != NULL) {
+          int ffd =
+              open(order[i + 1].command, O_CREAT | O_WRONLY | O_APPEND, 0644);
+          if (ffd < 0) {
+            perror("open");
+            exit(1);
+          }
+          dup2(ffd, STDOUT_FILENO);
+          close(ffd);
         } else if (order[i].type == piped_out_of) {
-        }
-        switch (order[i].type) {
-        case overwrite_file: {
-          int ffd = open(order[i + 1].command, O_CREAT | O_WRONLY | O_TRUNC);
-          dup2(ffd, STDOUT_FILENO);
-          close(ffd);
-          break;
-        }
-        case append_to_file: {
-          int ffd = open(order[i + 1].command, O_CREAT | O_WRONLY);
-          dup2(ffd, STDOUT_FILENO);
-          close(ffd);
-          break;
-        }
-        case piped_out_of: {
           close(pipefd[0]);
           dup2(pipefd[1], STDOUT_FILENO);
           close(pipefd[1]);
-          break;
-        case and: {
-          if (res != 0) {
-            exit(1);
-          }
-        }
-        case eor:
-          if (res == 0) {
-            exit(0);
-          }
-        default:
-          break;
-        }
-        }
-        if (order[i - 1].type == overwrite_file ||
-            order[i - 1].type == append_to_file) {
-          exit(0);
         }
         if (strchr(args[0], '/')) {
-          res = execve(args[0], args, environ);
-          if (res > 0) {
-            cprint("Execution failed. Unknown command: ");
-            cprint(order[i].command);
-          }
-          exit(1);
+          execve(args[0], args, environ);
+          cprint("Execution failed. Unknown path command: ");
+          cprint(args[0]);
+          cprint("\n");
+          exit(127);
         } else {
           int k = 0;
+          int res = -1;
           while (config.paths[k][0] != '\0') {
             char full_path[512];
             snprintf(full_path, sizeof(full_path), "%s/%s", config.paths[k],
@@ -421,20 +427,28 @@ int execute(char mode, char *execd, shellConf config) {
             res = execve(full_path, args, environ);
             k++;
           }
-          if (res > 0) {
-            cprint("Execution failed. Unknown command: ");
-            cprint(order[i].command);
-          }
+          cprint("Command not found: ");
+          cprint(args[0]);
+          cprint("\n");
           exit(127);
         }
       } else if (forked == -1) {
         cprint("fork failed\n");
       } else {
-        if (input_fd != 0)
+        if (input_fd != 0) {
           close(input_fd);
+          input_fd = 0;
+        }
         if (order[i].type != background) {
+          int status;
           if (waitpid(forked, &status, 0) == -1) {
             cprint("waitpid error\n");
+          } else {
+            if (WIFEXITED(status)) {
+              last_exit_status = WEXITSTATUS(status);
+            } else {
+              last_exit_status = -1;
+            }
           }
         }
         if (order[i].type == piped_out_of) {
@@ -442,11 +456,20 @@ int execute(char mode, char *execd, shellConf config) {
           input_fd = pipefd[0];
         }
       }
+      for (int a = 0; a < argc; a++)
+        free(args[a]);
+      free(args);
       disableRawMode();
       enable_term_rawmode();
       setcol(reset, reset);
       i++;
     }
+    int clean_i = 0;
+    while (order[clean_i].command != NULL) {
+      free(order[clean_i].command);
+      clean_i++;
+    }
+    free(order);
     break;
   }
   case 'f':
@@ -526,67 +549,72 @@ void loop(shellConf config) {
   char *piss = formatPISS(config);
   cprint(piss);
   free(piss);
-  char *command = malloc(256);
-  int buf_size = 256;
-  if (!command)
-    return;
+  cstring command = CSTRING_INIT;
   int index = 0;
-  char cur_c;
-  while (read(STDIN_FILENO, &cur_c, 1) == 1) {
-    if (cur_c == '\n' || cur_c == '\r') {
+  while (1) {
+    int key = read_key();
+    switch (key) {
+    case '\n':
       cprint("\n");
-      command[index] = '\0';
+      if (command.len > 0) {
+        cchstr_append(&command, '\0');
+        execute('c', command.str, config);
+      }
+      cstr_free(&command);
       index = 0;
-      if (command[0] != '\0')
-        execute('c', command, config);
+
       piss = formatPISS(config);
       cprint("\n");
       cprint(piss);
       free(piss);
-    } else if (cur_c == 127 || cur_c == '\b') {
+      break;
+    case 127:
       if (index > 0) {
+        cprint("\b");
+        chcdelete(&command, index - 1);
+        if (command.len - index + 1 > 0) {
+          write(STDOUT_FILENO, command.str + index - 1,
+                command.len - index + 1);
+        }
+        cprint(" \b");
+        for (int i = 0; i < (command.len - index + 1); i++) {
+          cprint("\b");
+        }
         index--;
-        cprint("\b \b");
       }
-    } else if (cur_c == 3) {
+      break;
+    case 3:
       cprint("^C\n");
+      cstr_free(&command);
       index = 0;
       piss = formatPISS(config);
       cprint(piss);
       free(piss);
-    } else if (cur_c == '\x1b') {
-      char seq[4] = {0};
-      read(STDIN_FILENO, &seq[0], 1);
-      read(STDIN_FILENO, &seq[1], 1);
-      kkey_t key;
-      if (seq[0] == '[') {
-        switch (seq[1]) {
-        case 'A':
-          key = KEY_ARROW_UP;
-          break;
-        case 'B':
-          key = KEY_ARROW_DOWN;
-          break;
-        case 'C':
-          key = KEY_ARROW_RIGHT;
-          break;
-        case 'D':
-          key = KEY_ARROW_LEFT;
-          break;
-        }
+      break;
+    case KEY_ARROW_RIGHT:
+      if (index < command.len) {
+        cr_rel_move(0, 1);
+        index++;
       }
-    } else {
-      if (index >= buf_size - 1) {
-        buf_size *= 2;
-        command = realloc(command, buf_size);
-        if (!command)
-          return;
+      break;
+    case KEY_ARROW_LEFT:
+      if (index > 0) {
+        cr_rel_move(0, -1);
+        index--;
       }
-      command[index++] = cur_c;
-      write(1, &cur_c, 1);
+      break;
+    default: {
+      chcinsert(&command, index, key);
+      index++;
+      write(STDOUT_FILENO, command.str + index - 1, command.len - index + 1);
+      for (int i = 0; i < (command.len - index); i++) {
+        cprint("\b");
+      }
+      break;
+    }
     }
   }
-  free(command);
+  cstr_free(&command);
 }
 
 int main(int argc, char **argv) {
