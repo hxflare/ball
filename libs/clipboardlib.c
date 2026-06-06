@@ -5,6 +5,29 @@
 #include <sys/types.h>
 #include <sys/un.h>
 #include <unistd.h>
+static void write_cstring(int fd, cstring *s) {
+  int32_t len = (int32_t)s->len;
+  write(fd, &len, sizeof(len));
+  if (len > 0)
+    write(fd, s->str, len);
+}
+static cstring read_cstring(int fd) {
+  cstring s = CSTRING_INIT;
+  int32_t len = 0;
+  read(fd, &len, sizeof(len));
+  if (len > 0) {
+    s.str = malloc(len);
+    s.len = len;
+    int received = 0;
+    while (received < len) {
+      int r = read(fd, s.str + received, len - received);
+      if (r <= 0)
+        break;
+      received += r;
+    }
+  }
+  return s;
+}
 int connect_cb_sock() {
   int server_socket;
   struct sockaddr_un server_addr;
@@ -31,14 +54,16 @@ void handle_request(struct cb_request *request, int fd,
                     struct clipboard *clip) {
   switch (request->type) {
   case GET_AT:
-    write(fd, &(clip->elements.strs[request->req_int]),
-          sizeof(request->req_str));
+    write_cstring(fd, &(clip->elements.strs[request->req_int]));
     break;
   case GET_CUR:
-    write(fd, &(clip->elements.strs[(*clip).cur]), sizeof(request->req_str));
+    write_cstring(fd, &(clip->elements.strs[clip->cur]));
     break;
   case GET_ALL:
-    write(fd, clip, sizeof(*clip));
+    int32_t n = clip->elements.n;
+    write(fd, &n, sizeof(n));
+    for (int i = 0; i < n; i++)
+      write_cstring(fd, &clip->elements.strs[i]);
     break;
   case ADD_NEW:
     csta_insert(&(clip->elements), &(request->req_str), 0);
@@ -54,6 +79,7 @@ void handle_request(struct cb_request *request, int fd,
     break;
   }
 }
+
 void cb_listen_loop(int fd, struct clipboard *clip) {
   int client_socket;
   struct sockaddr_un client_addr;
@@ -63,7 +89,7 @@ void cb_listen_loop(int fd, struct clipboard *clip) {
     socklen_t clen = sizeof(client_addr);
     client_socket = accept(fd, (struct sockaddr *)&client_addr, &clen);
     read(client_socket, &request_data, sizeof(struct cb_request));
-    handle_request(&request_data, fd, clip);
+    handle_request(&request_data, client_socket, clip);
     close(client_socket);
   }
 }
