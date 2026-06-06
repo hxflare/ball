@@ -75,26 +75,26 @@ Node *nodeize(Service *services, int amount) {
       int idx = get_service_index_by_name(cur_service->before[k], services);
       if (idx < 0)
         continue;
+      Node *bind_node = &nodes[idx];
       int already = 0;
-      for (int j = 0; j < cur_node->before_count; j++) {
-        if (cur_node->before[j] == idx) {
+      for (int j = 0; j < bind_node->before_count; j++) {
+        if (bind_node->before[j] == i) {
           already = 1;
           break;
         }
       }
       if (already)
         continue;
-      cur_node->before[cur_node->before_count++] = idx;
-      Node *bind_node = &nodes[idx];
+      bind_node->before[bind_node->before_count++] = i;
       int already2 = 0;
-      for (int j = 0; j < bind_node->after_count; j++) {
-        if (bind_node->after[j] == i) {
+      for (int j = 0; j < cur_node->after_count; j++) {
+        if (cur_node->after[j] == idx) {
           already2 = 1;
           break;
         }
       }
       if (!already2)
-        bind_node->after[bind_node->after_count++] = i;
+        cur_node->after[cur_node->after_count++] = idx;
     }
     for (int k = 0; k < cur_service->after_count; k++) {
       int idx = get_service_index_by_name(cur_service->after[k], services);
@@ -351,7 +351,9 @@ int main(int argc, char **argv) {
   service_root[amount].name[0] = '\0';
   int *order = topological_order(service_root, amount);
   for (int i = 0; i < amount; i++) {
-    execute_service(&service_root[order[i]]);
+    cprint(service_root[order[i]].name);
+    cprint("\n");
+    // execute_service(&service_root[order[i]]);
   }
   while (1)
     wait(NULL);
