@@ -316,6 +316,7 @@ int execute(char mode, char *execd, shellConf config) {
     if (!order)
       return EXIT_FAILURE;
     int i = 0;
+    int input_fd = 0;
     while (order[i].command != NULL) {
       int argc = 0;
       char **args = extract_args(order[i].command, config, &argc);
@@ -346,18 +347,49 @@ int execute(char mode, char *execd, shellConf config) {
         i++;
         continue;
       }
+      int pipefd[2];
+      if (order[i].type == piped_out_of) {
+        if (pipe(pipefd) < 0) {
+          perror("pipe failed");
+          exit(1);
+        }
+      }
       pid_t forked = fork();
       int status;
       if (forked == 0) {
         disableRawMode();
+        if (input_fd != 0) {
+          dup2(input_fd, STDIN_FILENO);
+          close(input_fd);
+        }
+
         if (order[i].type == overwrite_file) {
+
+        } else if (order[i].type == append_to_file) {
+
+        } else if (order[i].type == piped_out_of) {
+        }
+        switch (order[i].type) {
+        case overwrite_file: {
           int ffd = open(order[i + 1].command, O_CREAT | O_WRONLY | O_TRUNC);
           dup2(ffd, STDOUT_FILENO);
           close(ffd);
-        } else if (order[i].type == append_to_file) {
+          break;
+        }
+        case append_to_file: {
           int ffd = open(order[i + 1].command, O_CREAT | O_WRONLY);
           dup2(ffd, STDOUT_FILENO);
           close(ffd);
+          break;
+        }
+        case piped_out_of: {
+          close(pipefd[0]);
+          dup2(pipefd[1], STDOUT_FILENO);
+          close(pipefd[1]);
+          break;
+        default:
+          break;
+        }
         }
         if (order[i - 1].type == overwrite_file ||
             order[i - 1].type == append_to_file) {
@@ -378,7 +410,6 @@ int execute(char mode, char *execd, shellConf config) {
             snprintf(full_path, sizeof(full_path), "%s/%s", config.paths[k],
                      args[0]);
             res = execve(full_path, args, environ);
-
             k++;
           }
           if (res < 0) {
@@ -389,9 +420,17 @@ int execute(char mode, char *execd, shellConf config) {
         }
       } else if (forked == -1) {
         cprint("fork failed\n");
-      } else if (order[i].type != background) {
-        if (waitpid(forked, &status, 0) == -1) {
-          cprint("waitpid error\n");
+      } else {
+        if (input_fd != 0)
+          close(input_fd);
+        if (order[i].type != background) {
+          if (waitpid(forked, &status, 0) == -1) {
+            cprint("waitpid error\n");
+          }
+        }
+        if (order[i].type == piped_out_of) {
+          close(pipefd[1]);
+          input_fd = pipefd[0];
         }
       }
       disableRawMode();
