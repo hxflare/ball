@@ -356,6 +356,7 @@ int execute(char mode, char *execd, shellConf config) {
       }
       pid_t forked = fork();
       int status;
+      int res = 1;
       if (forked == 0) {
         disableRawMode();
         if (input_fd != 0) {
@@ -387,6 +388,15 @@ int execute(char mode, char *execd, shellConf config) {
           dup2(pipefd[1], STDOUT_FILENO);
           close(pipefd[1]);
           break;
+        case and: {
+          if (res != 0) {
+            exit(1);
+          }
+        }
+        case eor:
+          if (res == 0) {
+            exit(0);
+          }
         default:
           break;
         }
@@ -396,15 +406,14 @@ int execute(char mode, char *execd, shellConf config) {
           exit(0);
         }
         if (strchr(args[0], '/')) {
-          int res = execve(args[0], args, environ);
-          if (res < 0) {
+          res = execve(args[0], args, environ);
+          if (res > 0) {
             cprint("Execution failed. Unknown command: ");
             cprint(order[i].command);
           }
           exit(1);
         } else {
           int k = 0;
-          int res = -1;
           while (config.paths[k][0] != '\0') {
             char full_path[512];
             snprintf(full_path, sizeof(full_path), "%s/%s", config.paths[k],
@@ -412,7 +421,7 @@ int execute(char mode, char *execd, shellConf config) {
             res = execve(full_path, args, environ);
             k++;
           }
-          if (res < 0) {
+          if (res > 0) {
             cprint("Execution failed. Unknown command: ");
             cprint(order[i].command);
           }
@@ -435,7 +444,7 @@ int execute(char mode, char *execd, shellConf config) {
       }
       disableRawMode();
       enable_term_rawmode();
-      setcol(reset,reset);
+      setcol(reset, reset);
       i++;
     }
     break;
