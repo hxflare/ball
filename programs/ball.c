@@ -391,7 +391,6 @@ int execute(char mode, char *execd, shellConf config) {
           int ffd =
               open(order[i + 1].command, O_CREAT | O_WRONLY | O_TRUNC, 0644);
           if (ffd < 0) {
-            perror("open");
             exit(1);
           }
           dup2(ffd, STDOUT_FILENO);
@@ -401,7 +400,6 @@ int execute(char mode, char *execd, shellConf config) {
           int ffd =
               open(order[i + 1].command, O_CREAT | O_WRONLY | O_APPEND, 0644);
           if (ffd < 0) {
-            perror("open");
             exit(1);
           }
           dup2(ffd, STDOUT_FILENO);
@@ -413,7 +411,7 @@ int execute(char mode, char *execd, shellConf config) {
         }
         if (strchr(args[0], '/')) {
           execve(args[0], args, environ);
-          cprint("Execution failed. Unknown path command: ");
+          cprint("Execution failed. Unknown command: ");
           cprint(args[0]);
           cprint("\n");
           exit(127);
