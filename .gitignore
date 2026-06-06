@@ -52,3 +52,5 @@ building/isoroot/initramfs/bin/reboot
 building/isoroot/initramfs/bin/shutdown
 programs/getcb
 building/isoroot/initramfs/bin/getcb
+programs/gproc
+building/isoroot/initramfs/bin/gproc

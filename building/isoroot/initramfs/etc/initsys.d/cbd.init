@@ -1,0 +1,10 @@
+
+!type
+@command
+!after
+@clear.init
+!before
+@shell.init
+!functional
+echo starting clipboard daemon...
+cbd &
