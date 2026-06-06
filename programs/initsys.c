@@ -100,26 +100,26 @@ Node *nodeize(Service *services, int amount) {
       int idx = get_service_index_by_name(cur_service->after[k], services);
       if (idx < 0)
         continue;
-      Node *bind_node = &nodes[idx];
       int already = 0;
-      for (int j = 0; j < bind_node->before_count; j++) {
-        if (bind_node->before[j] == i) {
+      for (int j = 0; j < cur_node->before_count; j++) {
+        if (cur_node->before[j] == idx) {
           already = 1;
           break;
         }
       }
       if (already)
         continue;
-      bind_node->before[bind_node->before_count++] = i;
+      cur_node->before[cur_node->before_count++] = idx;
+      Node *bind_node = &nodes[idx];
       int already2 = 0;
-      for (int j = 0; j < cur_node->after_count; j++) {
-        if (cur_node->after[j] == idx) {
+      for (int j = 0; j < bind_node->after_count; j++) {
+        if (bind_node->after[j] == i) {
           already2 = 1;
           break;
         }
       }
       if (!already2)
-        cur_node->after[cur_node->after_count++] = idx;
+        bind_node->after[bind_node->after_count++] = i;
     }
   }
   return nodes;
@@ -187,23 +187,23 @@ Service parse_service(char *service_name) {
         cur_line++;
         while (cur_line < amm && lines[cur_line][0] != '!') {
           if (lines[cur_line][0] == '@') {
-            strncpy(service.before[count], lines[cur_line] + 1, 64);
-            count++;
-          }
-          cur_line++;
-        }
-        service.before_count = count;
-      } else if (strcmp(lines[cur_line] + 1, "before") == 0) {
-        int count = 0;
-        cur_line++;
-        while (cur_line < amm && lines[cur_line][0] != '!') {
-          if (lines[cur_line][0] == '@') {
             strncpy(service.after[count], lines[cur_line] + 1, 64);
             count++;
           }
           cur_line++;
         }
         service.after_count = count;
+      } else if (strcmp(lines[cur_line] + 1, "before") == 0) {
+        int count = 0;
+        cur_line++;
+        while (cur_line < amm && lines[cur_line][0] != '!') {
+          if (lines[cur_line][0] == '@') {
+            strncpy(service.before[count], lines[cur_line] + 1, 64);
+            count++;
+          }
+          cur_line++;
+        }
+        service.before_count = count;
       } else if (strcmp(lines[cur_line] + 1, "type") == 0) {
         cur_line++;
         while (cur_line < amm && lines[cur_line][0] != '!') {
@@ -274,6 +274,7 @@ void execute_service(Service *service) {
     int i = 0;
     while (service->functional[i][0] != '\0') {
       fork_pid = fork();
+
       if (fork_pid == 0) {
         char *args[] = {service->functional[i], NULL};
         execve(service->functional[i], args, environ);
@@ -281,7 +282,7 @@ void execute_service(Service *service) {
         exit(EXIT_FAILURE);
       } else if (fork_pid == -1) {
         cprint("fork failed\n");
-      } else if (service->before_count > 0) {
+      } else {
         int status;
         waitpid(fork_pid, &status, 0);
       }
@@ -310,7 +311,7 @@ void execute_service(Service *service) {
         exit(EXIT_FAILURE);
       } else if (fork_pid == -1) {
         cprint("fork failed\n");
-      } else if (service->before_count > 0) {
+      } else {
         int status;
         waitpid(fork_pid, &status, 0);
       }
