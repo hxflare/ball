@@ -25,6 +25,17 @@ void gcpos(int *rows, int *cols) {
   buf[i] = '\0';
   sscanf(&buf[2], "%d;%d", rows, cols);
 }
+void cr_move(int row, int col) {
+  char posbuf[32];
+  snprintf(posbuf, sizeof(posbuf), "\x1b[%d;%dH", row, col);
+  write(STDOUT_FILENO, posbuf, strlen(posbuf));
+}
+void cr_rel_move(int row, int col) {
+  int crow;
+  int ccol;
+  gcpos(&crow, &ccol);
+  cr_move(crow + row, ccol + col);
+}
 void gwinsize(int *rows, int *cols) {
   struct winsize ws;
   ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws);
@@ -105,4 +116,57 @@ void setcol(ecolor fg, ecolor bg) {
   char color_esc[16];
   int len = sprintf(color_esc, "\x1b[%i;%im", fg, bg + 10);
   write(1, color_esc, len);
+}
+int read_key() {
+  char c;
+  if (read(STDIN_FILENO, &c, 1) != 1)
+    return KEY_NULL;
+  if (c != '\x1b')
+    return c;
+
+  char seq[8];
+  int seq_len = 0;
+
+  while (seq_len < (int)sizeof(seq) - 1) {
+    if (read(STDIN_FILENO, &seq[seq_len], 1) != 1)
+      break;
+    seq_len++;
+    char last = seq[seq_len - 1];
+    if ((last >= 'A' && last <= 'Z') || (last >= 'a' && last <= 'z') ||
+        last == '~')
+      break;
+  }
+  seq[seq_len] = '\0';
+
+  if (seq_len == 0)
+    return KEY_ESC;
+
+  if (seq[0] == '[') {
+    if (seq_len >= 5 && seq[1] == '1' && seq[2] == ';') {
+      int modifier = seq[3] - '0';
+      if (modifier == 5) {
+        switch (seq[4]) {
+        case 'A':
+          return KEY_CTRL_ARROW_UP;
+        case 'B':
+          return KEY_CTRL_ARROW_DOWN;
+        case 'C':
+          return KEY_CTRL_ARROW_RIGHT;
+        case 'D':
+          return KEY_CTRL_ARROW_LEFT;
+        }
+      }
+    }
+    switch (seq[1]) {
+    case 'A':
+      return KEY_ARROW_UP;
+    case 'B':
+      return KEY_ARROW_DOWN;
+    case 'C':
+      return KEY_ARROW_RIGHT;
+    case 'D':
+      return KEY_ARROW_LEFT;
+    }
+  }
+  return KEY_ESC;
 }
