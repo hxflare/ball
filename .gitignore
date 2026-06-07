@@ -54,3 +54,5 @@ programs/getcb
 building/isoroot/initramfs/bin/getcb
 programs/gproc
 building/isoroot/initramfs/bin/gproc
+programs/chmod
+building/isoroot/initramfs/bin/chmod
