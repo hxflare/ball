@@ -45,6 +45,7 @@ void cr_move(int row, int col);
 void cr_rel_move(int row, int col);
 void gwinsize(int *rows, int *cols);
 void cprint(const char *string);
+char first_none_space(char *str);
 int read_key();
 char *str_replace(char *orig, char *rep, char *with);
 void print_strlist(const char **array);

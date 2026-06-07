@@ -1,5 +1,4 @@
 #include "../btools.h"
-#include <stdio.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <stdio.h>
@@ -23,7 +22,6 @@ void enable_term_rawmode() {
   raw.c_cc[VTIME] = 0;
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 }
-
 typedef enum exec_types {
   normal = 0,
   piped_out_of = 1,
@@ -45,7 +43,11 @@ typedef struct shellConf {
   char PISS[255];
   char paths[255][255];
 } shellConf;
-
+struct run_data {
+  cstring_da history;
+  int his_cur;
+  shellConf config;
+};
 char **extract_args(char *command, shellConf config, int *argc) {
   int raw_c = 1;
   int command_len = strlen(command);
@@ -475,7 +477,9 @@ int execute(char mode, char *execd, shellConf config) {
     FILE *fd = fopen(execd, "r");
     char line[1024];
     while (fgets(line, sizeof(line), fd) != NULL) {
-      execute('c', line, config);
+      if (first_none_space(line) != '#') {
+        execute('c', line, config);
+      }
     }
     break;
   }
@@ -549,30 +553,36 @@ shellConf getConf(FILE *rc, int execute_commands) {
   return config;
 }
 
-void loop(shellConf config) {
+void loop(struct run_data run) {
+  shellConf config = run.config;
   enable_term_rawmode();
   char *piss = formatPISS(config);
   cprint(piss);
   free(piss);
   cstring command = CSTRING_INIT;
   int index = 0;
+  run.his_cur = run.history.n;
   while (1) {
     int key = read_key();
     switch (key) {
     case '\n':
       cprint("\n");
       if (command.len > 0) {
+        cstring hist_item = CSTRING_INIT;
+        cpstr_append(&hist_item, command.str, command.len);
+        csta_append(&(run.history), &hist_item);
         cchstr_append(&command, '\0');
         execute('c', command.str, config);
       }
       cstr_free(&command);
       index = 0;
+      run.his_cur = run.history.n;
 
       piss = formatPISS(config);
-      cprint("\n");
       cprint(piss);
       free(piss);
       break;
+
     case 127:
       if (index > 0) {
         cprint("\b");
@@ -592,6 +602,7 @@ void loop(shellConf config) {
       cprint("^C\n");
       cstr_free(&command);
       index = 0;
+      run.his_cur = run.history.n;
       piss = formatPISS(config);
       cprint(piss);
       free(piss);
@@ -608,6 +619,42 @@ void loop(shellConf config) {
         index--;
       }
       break;
+    case KEY_ARROW_UP:
+      if (run.history.n > 0 && run.his_cur > 0) {
+        for (int i = 0; i < index; i++) {
+          cprint("\b");
+        }
+        cprint("\x1b[K");
+        run.his_cur--;
+        cstr_free(&command);
+        cpstr_append(&command, run.history.strs[run.his_cur].str,
+                     run.history.strs[run.his_cur].len);
+        if (command.len > 0) {
+          write(STDOUT_FILENO, command.str, command.len);
+        }
+        index = command.len;
+      }
+      break;
+
+    case KEY_ARROW_DOWN:
+      if (run.his_cur < run.history.n) {
+        for (int i = 0; i < index; i++) {
+          cprint("\b");
+        }
+        cprint("\x1b[K");
+        run.his_cur++;
+        cstr_free(&command);
+        if (run.his_cur < run.history.n) {
+          cpstr_append(&command, run.history.strs[run.his_cur].str,
+                       run.history.strs[run.his_cur].len);
+        }
+        if (command.len > 0) {
+          write(STDOUT_FILENO, command.str, command.len);
+        }
+        index = command.len;
+      }
+      break;
+
     default: {
       chcinsert(&command, index, key);
       index++;
@@ -624,6 +671,7 @@ void loop(shellConf config) {
 
 int main(int argc, char **argv) {
   tcgetattr(STDIN_FILENO, &orig_termios);
+  struct run_data run = {CSTRING_DA_INIT, 0};
   FILE *rcfile;
   shellConf conf;
   memset(&conf, 0, sizeof(shellConf));
@@ -658,9 +706,9 @@ int main(int argc, char **argv) {
     strncpy(conf.paths[1], "/usr/bin", 254);
     strncpy(conf.paths[2], "/sbin", 254);
   }
-
+  run.config = conf;
   if (argc > 1) {
-    if (strcmp("-c", argv[1])==0) {
+    if (strcmp("-c", argv[1]) == 0) {
       if (argc < 3)
         return 0;
 
@@ -682,7 +730,7 @@ int main(int argc, char **argv) {
     }
 
   } else {
-    loop(conf);
+    loop(run);
   }
   return 0;
 }
