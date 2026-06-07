@@ -5,14 +5,16 @@
 int main(int argc, char **argv) {
   struct stat st = {0};
   if (argc >= 2) {
-    if (stat(argv[argc - 1], &st) == -1) {
-      mkdir(argv[argc - 1], 0700);
-    } else {
-      cprint("Directory ");
-      cprint(argv[argc - 1]);
-      cprint(" already exists\n");
+    for (int i = 0; i < argc; i++) {
+      if (stat(argv[i], &st) == -1) {
+        mkdir(argv[i], 0700);
+      } else {
+        cprint("Directory ");
+        cprint(argv[i]);
+        cprint(" already exists\n");
+      }
     }
-  }else {
+  } else {
     cprint("Not enough arguments\n");
   }
 }
