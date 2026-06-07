@@ -109,6 +109,7 @@ void chcinsert(cstring *str, int idx, char ch) {
   str->str[idx] = ch;
   str->len++;
 }
+void csprint(cstring *str) { write(STDOUT_FILENO, str->str, str->len); }
 int cstrvislen(cstring *str) {
   int vlen = 0;
   for (int i = 0; i < str->len; i++) {

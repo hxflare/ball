@@ -1,4 +1,5 @@
 #include "../btools.h"
+#include <stdio.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <stdio.h>
@@ -470,8 +471,14 @@ int execute(char mode, char *execd, shellConf config) {
     free(order);
     break;
   }
-  case 'f':
+  case 'f': {
+    FILE *fd = fopen(execd, "r");
+    char line[1024];
+    while (fgets(line, sizeof(line), fd) != NULL) {
+      execute('c', line, config);
+    }
     break;
+  }
   default:
     cprint("invalid mode\n");
     return EXIT_FAILURE;
@@ -653,7 +660,7 @@ int main(int argc, char **argv) {
   }
 
   if (argc > 1) {
-    if (argv[1][0] == '-' && argv[1][1] == 'c') {
+    if (strcmp("-c", argv[1])==0) {
       if (argc < 3)
         return 0;
 

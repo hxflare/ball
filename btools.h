@@ -58,6 +58,7 @@ void cstcol(cstring *str, ecolor fg, ecolor bg);
 void setcol(ecolor fg, ecolor bg);
 void chcinsert(cstring *str, int idx, char ch);
 void chcdelete(cstring *str, int idx);
+void csprint(cstring *str);
 int cstrvislen(cstring *str);
 void csta_pop(cstring_da *array, int pop_idx);
 void csta_append(cstring_da *array, cstring *str);
