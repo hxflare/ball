@@ -56,3 +56,4 @@ programs/gproc
 building/isoroot/initramfs/bin/gproc
 programs/chmod
 building/isoroot/initramfs/bin/chmod
+building/isoroot/initramfs/bin/.stamp
