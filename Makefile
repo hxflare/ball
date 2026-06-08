@@ -1,5 +1,5 @@
 CC          := gcc
-CFLAGS      := -static -Wall -Wextra
+CFLAGS      := -static
 LIBS_DIR    := libs
 PROG_DIR    := programs
 LINUX_DIR   := building/.linux
