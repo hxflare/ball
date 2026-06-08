@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <uchar.h>
 #include <unistd.h>
 
 void cprint(const char *string) {
@@ -177,4 +178,23 @@ char first_none_space(char *str) {
     }
   }
   return '\0';
+}
+int ends_with(char *str, char *suffix) {
+  size_t str_len = strlen(str);
+  size_t suffix_len = strlen(suffix);
+  if (suffix_len > str_len)
+    return 0;
+  return (strcmp(str + (str_len - suffix_len), suffix) == 0);
+}
+int starts_with(char *str, char *prefix) {
+  size_t prefix_len = strlen(prefix);
+  return (strncmp(str, prefix, prefix_len) == 0);
+}
+int chappear(char *str, char ch) {
+  int n = 0;
+  for (int i = 0; i < strlen(str); i++) {
+    if (str[i] == ch)
+      n++;
+  }
+  return n;
 }

@@ -1,5 +1,6 @@
 #include "../btools.h"
 #include <fcntl.h>
+#include <glob.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -167,7 +168,43 @@ char **extract_args(char *command, shellConf config, int *argc) {
     return aliased;
   }
 }
-
+char **expand_globs(int *argc, char **args) {
+  int max_args = *argc + 100;
+  char **expanded_args = malloc(max_args * sizeof(char *));
+  int new_argc = 0;
+  int old_argc = *argc;
+  for (int i = 0; i < old_argc; i++) {
+    if (strchr(args[i], '*') || strchr(args[i], '?') || strchr(args[i], '[')) {
+      glob_t glob_res;
+      int ret = glob(args[i], GLOB_NOCHECK, NULL, &glob_res);
+      if (ret == 0) {
+        if (new_argc + glob_res.gl_pathc >= max_args) {
+          max_args += glob_res.gl_pathc + 50;
+          expanded_args = realloc(expanded_args, max_args * sizeof(char *));
+        }
+        for (size_t j = 0; j < glob_res.gl_pathc; j++) {
+          expanded_args[new_argc++] = strdup(glob_res.gl_pathv[j]);
+        }
+        globfree(&glob_res);
+      } else {
+        expanded_args[new_argc++] = strdup(args[i]);
+      }
+    } else {
+      expanded_args[new_argc++] = strdup(args[i]);
+    }
+    if (new_argc >= max_args - 1) {
+      max_args *= 2;
+      expanded_args = realloc(expanded_args, max_args * sizeof(char *));
+    }
+  }
+  expanded_args[new_argc] = NULL;
+  *argc = new_argc;
+  for (int i = 0; i < old_argc; i++) {
+    free(args[i]);
+  }
+  free(args);
+  return expanded_args;
+}
 exec_batch *get_exec_order(char *raw) {
   int len = strlen(raw);
   char *cur_command = malloc(256);
@@ -340,6 +377,10 @@ int execute(char mode, char *execd, shellConf config) {
       if (!args || !args[0] || args[0][0] == '\0') {
         i++;
         continue;
+      }
+      char **expanded_args = expand_globs(&argc, args);
+      if (expanded_args) {
+        args = expanded_args;
       }
       if (strcmp(args[0], "cd") == 0) {
         const char *dir = (argc > 1) ? args[1] : getenv("HOME");
@@ -635,7 +676,6 @@ void loop(struct run_data run) {
         index = command.len;
       }
       break;
-
     case KEY_ARROW_DOWN:
       if (run.his_cur < run.history.n) {
         for (int i = 0; i < index; i++) {
@@ -654,7 +694,6 @@ void loop(struct run_data run) {
         index = command.len;
       }
       break;
-
     default: {
       chcinsert(&command, index, key);
       index++;
@@ -675,10 +714,8 @@ int main(int argc, char **argv) {
   FILE *rcfile;
   shellConf conf;
   memset(&conf, 0, sizeof(shellConf));
-
   char *rc_path = concat(getenv("HOME"), "/.ballrc");
   rcfile = fopen(rc_path, "r");
-
   if (rcfile == NULL) {
     rcfile = fopen(rc_path, "w");
     if (rcfile != NULL) {
@@ -688,7 +725,6 @@ int main(int argc, char **argv) {
               "!ALIAS\n@ls=l -cthi\n"
               "!PATH\n@/bin\n@/usr/bin\n@/usr/local/bin\n@/sbin\n@/usr/sbin\n");
       fclose(rcfile);
-
       rcfile = fopen(rc_path, "r");
     }
   }
@@ -711,7 +747,6 @@ int main(int argc, char **argv) {
     if (strcmp("-c", argv[1]) == 0) {
       if (argc < 3)
         return 0;
-
       char *arg = strdup("");
       for (int i = 2; i < argc; i++) {
         char *with_arg = concat(arg, argv[i]);
@@ -720,7 +755,6 @@ int main(int argc, char **argv) {
         free(with_arg);
         arg = with_space;
       }
-
       execute('c', arg, conf);
       free(arg);
     } else {
@@ -728,7 +762,6 @@ int main(int argc, char **argv) {
         execute('f', argv[i], conf);
       }
     }
-
   } else {
     loop(run);
   }
