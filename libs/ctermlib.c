@@ -157,6 +157,30 @@ int read_key() {
           return KEY_CTRL_ARROW_LEFT;
         }
       }
+      if (modifier == 2) {
+        switch (seq[4]) {
+        case 'A':
+          return KEY_SHIFT_ARROW_UP;
+        case 'B':
+          return KEY_SHIFT_ARROW_DOWN;
+        case 'C':
+          return KEY_SHIFT_ARROW_RIGHT;
+        case 'D':
+          return KEY_SHIFT_ARROW_LEFT;
+        }
+      }
+      if (modifier == 6) {
+        switch (seq[4]) {
+        case 'A':
+          return KEY_CTRL_SHIFT_ARROW_UP;
+        case 'B':
+          return KEY_CTRL_SHIFT_ARROW_DOWN;
+        case 'C':
+          return KEY_CTRL_SHIFT_ARROW_RIGHT;
+        case 'D':
+          return KEY_CTRL_SHIFT_ARROW_LEFT;
+        }
+      }
     }
     switch (seq[1]) {
     case 'A':
@@ -171,6 +195,7 @@ int read_key() {
   }
   return KEY_ESC;
 }
+
 char first_none_space(char *str) {
   for (int i = 0; i < strlen(str); i++) {
     if (str[i] != ' ') {
