@@ -1,3 +1,4 @@
+#include "../bsys.h"
 #include "../btools.h"
 #include <fcntl.h>
 #include <stdio.h>
@@ -9,9 +10,7 @@
 
 #define CK(k) ((k) & 0x1f)
 #define UCK(k) ((k) | 0x60)
-typedef struct int2 {
-  int x, y;
-} int2;
+#define CTAB &(run_data.tabs[run_data.c_tab])
 enum editor_mode {
   view,
   edit,
@@ -43,9 +42,11 @@ struct tab {
   cstring selected;
   int2 select_start;
   int2 select_end;
+  int selecting;
   int start;
   cstring filename;
   cstring_da lines;
+  cstring raw_text;
   int2 mem_pos;
   int *line_scroll;
 };
@@ -76,7 +77,7 @@ void disableRawMode() {
   cprint("exited\n");
 }
 void switch_tabs(int tab_i) {
-  struct tab *prev = &(run_data.tabs[run_data.c_tab]);
+  struct tab *prev = CTAB;
   prev->mem_pos = run_data.cpos;
   run_data.c_tab = tab_i;
   struct tab *new = &(run_data.tabs[tab_i]);
@@ -107,20 +108,68 @@ int abs_row() {
          run_data.row_bound.x;
 }
 int abs_col() { return run_data.cpos.x - run_data.col_bound.x; }
-void write_file() {
+void update_raw() {
   cstring full = CSTRING_INIT;
-  struct tab *ctab = &(run_data.tabs[run_data.c_tab]);
+  struct tab *ctab = CTAB;
   for (int i = 0; i < ctab->lines.n; i++) {
     ccstr_append(&full, &(ctab->lines.strs[i]));
     if (i != ctab->lines.n - 1)
       cchstr_append(&full, '\n');
   }
+  ctab->raw_text = full;
+}
+void update_lines() {
+  struct tab *ctab = CTAB;
+  cstring_da arr = CSTRING_DA_INIT;
+  cstring cur = CSTRING_INIT;
+  for (int i = 0; i < ctab->raw_text.len; i++) {
+    if (ctab->raw_text.str[i] == '\n') {
+      csta_append(&arr, &cur);
+      cur = CSTRING_INIT;
+    } else {
+      cchstr_append(&cur, ctab->raw_text.str[i]);
+    }
+  }
+  csta_append(&arr, &cur);
+  for (int i = 0; i < ctab->lines.n; i++) {
+    cstr_free(&(ctab->lines.strs[i]));
+  }
+  if (ctab->lines.strs)
+    free(ctab->lines.strs);
+  ctab->lines = arr;
+  ctab->line_scroll = realloc(ctab->line_scroll, sizeof(int) * ctab->lines.n);
+}
+void write_file() {
+  update_raw();
+  struct tab *ctab = CTAB;
   char *path = malloc(ctab->filename.len + 1);
   memcpy(path, ctab->filename.str, ctab->filename.len);
   path[ctab->filename.len] = '\0';
   int fd = open(path, O_WRONLY | O_TRUNC | O_CREAT, 0644);
-  write(fd, full.str, full.len);
+  write(fd, ctab->raw_text.str, ctab->raw_text.len);
   close(fd);
+}
+int raw_coords(int2 *target) {
+  struct tab *ctab = CTAB;
+  int2 pos = INT2_INIT;
+  int2 ftarget;
+  if (target == NULL) {
+    ftarget.x = abs_col();
+    ftarget.y = abs_row();
+  } else {
+    ftarget = *target;
+  }
+  for (int i = 0; i < ctab->raw_text.len; i++) {
+    if (ctab->raw_text.str[i] == '\n') {
+      pos.y++;
+      pos.x = 0;
+    } else {
+      pos.x++;
+    }
+    if (pos.x == ftarget.x && pos.y == ftarget.y) {
+      return i;
+    }
+  }
 }
 void clamp_cursor() {
   switch (run_data.mode) {
@@ -149,7 +198,7 @@ void clamp_cursor() {
     }
     clamp_start();
     int ar = abs_row();
-    struct tab *ctab = &(run_data.tabs[run_data.c_tab]);
+    struct tab *ctab = CTAB;
     if (ar < 0)
       ar = 0;
     if (ar >= ctab->lines.n)
@@ -171,7 +220,7 @@ void clamp_cursor() {
   clamp_start();
 }
 char get_cur_char() {
-  struct tab *ctab = &(run_data.tabs[run_data.c_tab]);
+  struct tab *ctab = CTAB;
   int line_idx = abs_row();
   int col_idx = abs_col();
   if (line_idx > ctab->lines.n) {
@@ -183,22 +232,34 @@ char get_cur_char() {
 }
 
 void cmove(enum cmove_type type) {
-  struct tab *ctab = &(run_data.tabs[run_data.c_tab]);
+  struct tab *ctab = CTAB;
   int c_abrow = run_data.cpos.y + ctab->start - run_data.row_bound.x;
   int c_abcol = run_data.cpos.x - run_data.col_bound.x;
   cstring *cline = &(ctab->lines.strs[c_abrow]);
   switch (type) {
   case left:
     run_data.cpos.x--;
+    ctab->selecting = 0;
+    ctab->select_start = (int2){-1, -1};
+    ctab->select_end = (int2){-1, -1};
     break;
   case up:
     run_data.cpos.y--;
+    ctab->selecting = 0;
+    ctab->select_start = (int2){-1, -1};
+    ctab->select_end = (int2){-1, -1};
     break;
   case right:
     run_data.cpos.x++;
+    ctab->selecting = 0;
+    ctab->select_start = (int2){-1, -1};
+    ctab->select_end = (int2){-1, -1};
     break;
   case down:
     run_data.cpos.y++;
+    ctab->selecting = 0;
+    ctab->select_start = (int2){-1, -1};
+    ctab->select_end = (int2){-1, -1};
     break;
   case ctrl_left: {
     int i_a = c_abcol - 1;
@@ -208,6 +269,9 @@ void cmove(enum cmove_type type) {
       i_a--;
       run_data.cpos.x--;
     }
+    ctab->selecting = 0;
+    ctab->select_start = (int2){-1, -1};
+    ctab->select_end = (int2){-1, -1};
     break;
   }
   case ctrl_right: {
@@ -218,18 +282,49 @@ void cmove(enum cmove_type type) {
       i_d++;
       run_data.cpos.x++;
     }
+    ctab->selecting = 0;
+    ctab->select_start = (int2){-1, -1};
+    ctab->select_end = (int2){-1, -1};
     break;
   }
   case shift_left:
+    if (!ctab->selecting) {
+      ctab->select_start = (int2){c_abcol, c_abrow};
+      ctab->selecting = 1;
+    }
     run_data.cpos.x--;
+    break;
+  case shift_right:
+    if (!ctab->selecting) {
+      ctab->select_start = (int2){c_abcol, c_abrow};
+      ctab->selecting = 1;
+    }
+    run_data.cpos.x++;
+    break;
+  case shift_up:
+    if (!ctab->selecting) {
+      ctab->select_start = (int2){c_abcol, c_abrow};
+      ctab->selecting = 1;
+    }
+    run_data.cpos.y--;
+    break;
+  case shift_down:
+    if (!ctab->selecting) {
+      ctab->select_start = (int2){c_abcol, c_abrow};
+      ctab->selecting = 1;
+    }
+    run_data.cpos.y++;
     break;
   }
   clamp_cursor();
+  if (ctab->selecting) {
+    ctab->select_end = (int2){abs_col(), abs_row()};
+  }
 }
 void place_char(char c) {
   int c_abrow = abs_row();
   int c_abcol = run_data.cpos.x - run_data.col_bound.x;
-  struct tab *ctab = &(run_data.tabs[run_data.c_tab]);
+  struct tab *ctab = CTAB;
 
   if (c == KEY_ENTER) {
     cstring *cur_line = &ctab->lines.strs[c_abrow];
@@ -239,8 +334,7 @@ void place_char(char c) {
       cur_line->len = c_abcol;
     }
     csta_insert(&ctab->lines, &tail, c_abrow + 1);
-    ctab->line_scroll =
-        realloc(ctab->line_scroll, sizeof(int) * ctab->lines.n);
+    ctab->line_scroll = realloc(ctab->line_scroll, sizeof(int) * ctab->lines.n);
     memmove(ctab->line_scroll + c_abrow + 1, ctab->line_scroll + c_abrow,
             sizeof(int) * (ctab->lines.n - c_abrow - 1));
     ctab->line_scroll[c_abrow + 1] = 0;
@@ -255,7 +349,8 @@ void place_char(char c) {
       run_data.cpos.x--;
     } else if (c_abrow > 0) {
       int prev_len = ctab->lines.strs[c_abrow - 1].len;
-      cpstr_append(&ctab->lines.strs[c_abrow - 1], ctab->lines.strs[c_abrow].str,
+      cpstr_append(&ctab->lines.strs[c_abrow - 1],
+                   ctab->lines.strs[c_abrow].str,
                    ctab->lines.strs[c_abrow].len);
       cstr_free(&ctab->lines.strs[c_abrow]);
       csta_pop(&ctab->lines, c_abrow);
@@ -274,12 +369,13 @@ void place_char(char c) {
 }
 void exit_clean() { exit(0); };
 void process_input() {
+  struct tab *ctab = CTAB;
   clamp_cursor();
   int key = read_key();
   if (key == KEY_NULL)
     return;
   switch (key) {
-  case CK('x'):
+  case CK('q'):
     exit_clean();
     break;
   case KEY_ARROW_UP:
@@ -306,7 +402,20 @@ void process_input() {
   case KEY_SHIFT_ARROW_RIGHT:
     cmove(shift_right);
     break;
+  case KEY_SHIFT_ARROW_UP:
+    cmove(shift_up);
+    break;
+  case KEY_SHIFT_ARROW_DOWN:
+    cmove(shift_down);
+    break;
   case CK('t'):
+    if (run_data.c_tab >= run_data.tabs_n - 1) {
+      switch_tabs(0);
+    } else {
+      switch_tabs(run_data.c_tab + 1);
+    }
+    break;
+  case KEY_SHIFT_TAB:
     if (run_data.c_tab >= run_data.tabs_n - 1) {
       switch_tabs(0);
     } else {
@@ -327,17 +436,33 @@ void process_input() {
       place_char(' ');
     }
     break;
+  case CK('c'):
+    cb_copy(ctab->selected);
+    break;
+  case CK('v'): {
+    cstring *cb = cb_get_cur();
+    cstr_insert(cb, &ctab->raw_text, raw_coords(NULL));
+    update_lines();
+    break;
+  }
+  case CK('x'): {
+    cb_copy(cstr_cut(&ctab->raw_text, raw_coords(&ctab->select_start),
+                     raw_coords(&ctab->select_end)));
+    update_lines();
+    break;
+  }
   default:
-    if (run_data.mode == edit) {
+    if (run_data.mode == edit && key < 256) {
       place_char(key);
     }
     break;
   }
   clamp_cursor();
+  update_raw();
 }
 void draw_lines(cstring *ab, int *rows_left, int *row) {
   int max_idxlen = intlen(run_data.tabs[run_data.c_tab].lines.n);
-  struct tab *ctab = &(run_data.tabs[run_data.c_tab]);
+  struct tab *ctab = CTAB;
   for (int lineidx = ctab->start; lineidx < ctab->lines.n && *rows_left > 0;
        lineidx++) {
     cstring full = CSTRING_INIT;
@@ -366,8 +491,8 @@ void draw_lines(cstring *ab, int *rows_left, int *row) {
           (*row)++;
         } else {
           cstring truncated = CSTRING_INIT;
-          getrange(&(ctab->lines.strs[lineidx]), av_cols, ctab->line_scroll[lineidx],
-                   &truncated);
+          getrange(&(ctab->lines.strs[lineidx]), av_cols,
+                   ctab->line_scroll[lineidx], &truncated);
           ccstr_append(&(ab[*row]), &idxstr);
           cchstr_append(&(ab[*row]), ' ');
           cchstr_append(&(ab[*row]), run_data.staticconf.line_char);
@@ -404,6 +529,37 @@ void draw_lines(cstring *ab, int *rows_left, int *row) {
         }
       }
     } else {
+      int sel_a = -1, sel_b = -1;
+      if (ctab->select_start.x != -1 && ctab->select_end.x != -1) {
+        int2 s = ctab->select_start;
+        int2 e = ctab->select_end;
+        if (s.y > e.y || (s.y == e.y && s.x > e.x)) {
+          int2 tmp = s;
+          s = e;
+          e = tmp;
+        }
+        if (lineidx >= s.y && lineidx <= e.y) {
+          int line_len = ctab->lines.strs[lineidx].len;
+          int from = (lineidx == s.y) ? s.x : 0;
+          int to = (lineidx == e.y) ? e.x : line_len;
+          if (from < 0)
+            from = 0;
+          if (to > line_len)
+            to = line_len;
+          if (from < to) {
+            sel_a = idxstr.len + 3 + from;
+            sel_b = idxstr.len + 3 + to;
+          }
+        }
+      }
+      if (sel_a != -1) {
+        char reset_esc[16];
+        int reset_len = sprintf(reset_esc, "\x1b[0m");
+        for (int i = 0; i < reset_len; i++) {
+          chcinsert(&full, sel_b + i, reset_esc[i]);
+        }
+        cstcol_idx(&full, black, white, sel_a);
+      }
       ccstr_append(&(ab[*row]), &full);
       (*rows_left)--;
       (*row)++;
@@ -412,21 +568,39 @@ void draw_lines(cstring *ab, int *rows_left, int *row) {
     cstr_free(&full);
   }
 }
-void highlight_selection(cstring *ab) {
-  int file_start = 0;
-  {
-    int i = 0;
-    int newlines = 0;
-    while (newlines < run_data.row_bound.x) {
-      file_start++;
-      if (ab->str[i] == '\n') {
-        newlines++;
-      }
-      i++;
+void update_selected_text(void) {
+  struct tab *ctab = CTAB;
+  if (ctab->selected.str)
+    cstr_free(&(ctab->selected));
+  if (ctab->select_end.x == -1 || ctab->select_end.y == -1 ||
+      ctab->select_start.x == -1 || ctab->select_start.y == -1)
+    return;
+  int2 s = ctab->select_start;
+  int2 e = ctab->select_end;
+  if (s.y > e.y || (s.y == e.y && s.x > e.x)) {
+    int2 tmp = s;
+    s = e;
+    e = tmp;
+  }
+  if (s.y < 0 || e.y >= ctab->lines.n)
+    return;
+  cstring out = CSTRING_INIT;
+  for (int lineidx = s.y; lineidx <= e.y; lineidx++) {
+    int line_len = ctab->lines.strs[lineidx].len;
+    int from = (lineidx == s.y) ? s.x : 0;
+    int to = (lineidx == e.y) ? e.x : line_len;
+    if (from < 0)
+      from = 0;
+    if (to > line_len)
+      to = line_len;
+    if (from < to) {
+      cpstr_append(&out, ctab->lines.strs[lineidx].str + from, to - from);
+    }
+    if (lineidx != e.y) {
+      cchstr_append(&out, '\n');
     }
   }
-
-  return;
+  ctab->selected = out;
 }
 void draw_top(cstring *ab, int *rows_left, int *row) {
   cstring full = CSTRING_INIT;
@@ -497,7 +671,7 @@ void draw_viewer() {
   cstring *lines_b = malloc(sizeof(cstring) * run_data.rows);
   int row = 0;
   for (int i = 0; i < run_data.rows; i++) {
-    lines_b[i] = (cstring)CSTRING_INIT;
+    lines_b[i] = CSTRING_INIT;
   }
   cpstr_append(&ab, "\x1b[?25l", 6);
   cpstr_append(&ab, "\x1b[H", 3);
@@ -522,7 +696,7 @@ void draw_viewer() {
 
   draw_lines(lines_b, &left, &row);
   merge_lines(&ab, lines_b, row);
-  highlight_selection(&ab);
+  update_selected_text();
   char posbuf[32];
   snprintf(posbuf, sizeof(posbuf), "\x1b[%d;%dH", run_data.cpos.y + 1,
            run_data.cpos.x + 1);
@@ -559,7 +733,7 @@ void read_lines(cstring filename, struct tab *out) {
   while (read(fd, &c, 1) == 1) {
     if (c == '\n') {
       csta_append(&out->lines, &cur_line);
-      cur_line = (cstring)CSTRING_INIT;
+      cur_line = CSTRING_INIT;
       continue;
     }
     cchstr_append(&cur_line, c);
@@ -578,12 +752,15 @@ int opentab(char *filename) {
   run_data.tabs = new_tabs;
   struct tab *c_tab = &(run_data.tabs[run_data.tabs_n - 1]);
   memset(c_tab, 0, sizeof(struct tab));
-  (c_tab->filename) = (cstring)CSTRING_INIT;
+  (c_tab->filename) = CSTRING_INIT;
   cpstr_append(&(c_tab->filename), filename, strlen(filename));
   read_lines(c_tab->filename, c_tab);
   c_tab->line_scroll = calloc(c_tab->lines.n, sizeof(int));
-  c_tab->mem_pos = (int2){0, 0};
-  c_tab->selected = (cstring)CSTRING_INIT;
+  c_tab->mem_pos = INT2_INIT;
+  c_tab->selected = CSTRING_INIT;
+  c_tab->select_start = (int2){-1, -1};
+  c_tab->select_end = (int2){-1, -1};
+  c_tab->selecting = 0;
   return 0;
 }
 void initconf() {

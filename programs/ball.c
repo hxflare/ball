@@ -23,6 +23,7 @@ void enable_term_rawmode() {
   raw.c_cc[VTIME] = 0;
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 }
+
 typedef enum exec_types {
   normal = 0,
   piped_out_of = 1,
@@ -49,6 +50,7 @@ struct run_data {
   int his_cur;
   shellConf config;
 };
+
 char **extract_args(char *command, shellConf config, int *argc) {
   int raw_c = 1;
   int command_len = strlen(command);
@@ -168,6 +170,7 @@ char **extract_args(char *command, shellConf config, int *argc) {
     return aliased;
   }
 }
+
 char **expand_globs(int *argc, char **args) {
   int max_args = *argc + 100;
   char **expanded_args = malloc(max_args * sizeof(char *));
@@ -205,6 +208,7 @@ char **expand_globs(int *argc, char **args) {
   free(args);
   return expanded_args;
 }
+
 exec_batch *get_exec_order(char *raw) {
   int len = strlen(raw);
   char *cur_command = malloc(256);

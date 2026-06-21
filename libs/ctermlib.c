@@ -115,7 +115,7 @@ void setcol(ecolor fg, ecolor bg) {
     return;
   }
   char color_esc[16];
-  int len = sprintf(color_esc, "\x1b[%i;%im", fg, bg + 10);
+  int len = sprintf(color_esc, "\x1b[%im\x1b[%im", fg, bg + 10);
   write(1, color_esc, len);
 }
 int read_key() {
@@ -145,6 +145,7 @@ int read_key() {
   if (seq[0] == '[') {
     if (seq_len >= 5 && seq[1] == '1' && seq[2] == ';') {
       int modifier = seq[3] - '0';
+
       if (modifier == 5) {
         switch (seq[4]) {
         case 'A':
@@ -191,6 +192,8 @@ int read_key() {
       return KEY_ARROW_RIGHT;
     case 'D':
       return KEY_ARROW_LEFT;
+    case 'Z':
+      return KEY_SHIFT_TAB;
     }
   }
   return KEY_ESC;

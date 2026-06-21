@@ -22,6 +22,41 @@ void cstr_free(cstring *str) {
   str->str = NULL;
   str->len = 0;
 }
+void cstr_insert(cstring *insert, cstring *in, int idx) {
+  if (idx < 0)
+    idx = 0;
+  if (idx > (int)in->len)
+    idx = in->len;
+  int new_len = in->len + insert->len;
+  char *new_str = realloc(in->str, new_len);
+  if (!new_str)
+    return;
+  in->str = new_str;
+  memmove(in->str + idx + insert->len, in->str + idx, in->len - idx);
+  memcpy(in->str + idx, insert->str, insert->len);
+  in->len = new_len;
+}
+cstring cstr_cut(cstring *str, int start, int end) {
+  cstring cstring_ret = CSTRING_INIT;
+  if (start > end) {
+    int x = start; start = end; end = x;
+  }
+  if (start < 0) start = 0;
+  if (end > (int)str->len) end = str->len;
+  if (end < start) end = start;
+  cstring_ret.len = end - start;
+  if (cstring_ret.len > 0) {
+    cstring_ret.str = malloc(cstring_ret.len + 1);
+    memcpy(cstring_ret.str, str->str + start, cstring_ret.len);
+    cstring_ret.str[cstring_ret.len] = '\0';
+
+    memmove(str->str + start, str->str + end, str->len - end);
+    str->len -= cstring_ret.len;
+    char *newbuf = realloc(str->str, str->len);
+    if (newbuf || str->len == 0) str->str = newbuf;
+  }
+  return cstring_ret;
+}
 void cstr_replace(int a, int b, cstring *rep, cstring *with) {
   while ((int)rep->len < a) {
     cchstr_append(rep, ' ');
@@ -91,8 +126,19 @@ void cstcol(cstring *str, ecolor fg, ecolor bg) {
     return;
   }
   char color_esc[16];
-  int len = sprintf(color_esc, "\x1b[%i;%im", fg, bg + 10);
+  int len = sprintf(color_esc, "\x1b[%im\x1b[%im", fg, bg + 10);
   cpstr_append(str, color_esc, len);
+}
+void cstcol_idx(cstring *str, ecolor fg, ecolor bg, int idx) {
+  if (fg == reset) {
+    cprint("\033[0m");
+    return;
+  }
+  char color_esc[16];
+  int len = sprintf(color_esc, "\x1b[%im\x1b[%im", fg, bg + 10);
+  for (int i = 0; i < len; i++) {
+    chcinsert(str, idx + i, color_esc[i]);
+  }
 }
 int getrange(cstring *str, int range, int start, cstring *ret) {
   if (str->len < start + range)

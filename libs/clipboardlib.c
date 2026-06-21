@@ -57,9 +57,20 @@ void handle_request(struct cb_request *request, int fd,
                     struct clipboard *clip) {
   switch (request->type) {
   case GET_AT:
+    if (request->req_int < 0 || request->req_int >= clip->elements.n) {
+      cstring empty = CSTRING_INIT;
+      write_cstring(fd, &empty);
+      break;
+    }
     write_cstring(fd, &(clip->elements.strs[request->req_int]));
     break;
   case GET_CUR:
+    if (clip->elements.n == 0 || clip->cur < 0 ||
+        clip->cur >= clip->elements.n) {
+      cstring empty = CSTRING_INIT;
+      write_cstring(fd, &empty);
+      break;
+    }
     write_cstring(fd, &(clip->elements.strs[clip->cur]));
     break;
   case GET_ALL: {
@@ -105,6 +116,8 @@ cstring *cb_get_idx(int idx) {
   cstring *s_str = calloc(1, sizeof(cstring));
   struct cb_request request;
   int server_socket = connect_cb_sock();
+  if (server_socket < 0)
+    return s_str;
   request.req_int = idx;
   request.type = GET_AT;
   write(server_socket, &request, sizeof(request));
@@ -116,6 +129,8 @@ cstring *cb_get_cur() {
   cstring *s_str = calloc(1, sizeof(cstring));
   struct cb_request request;
   int server_socket = connect_cb_sock();
+  if (server_socket < 0)
+    return s_str;
   request.req_int = 0;
   request.type = GET_CUR;
   write(server_socket, &request, sizeof(request));
@@ -127,6 +142,8 @@ struct clipboard *cb_get_all() {
   struct clipboard *cb = calloc(1, sizeof(struct clipboard));
   struct cb_request request;
   int server_socket = connect_cb_sock();
+  if (server_socket < 0)
+    return cb;
   request.req_int = 0;
   request.type = GET_ALL;
   write(server_socket, &request, sizeof(request));
@@ -136,6 +153,8 @@ struct clipboard *cb_get_all() {
 }
 void cb_copy(cstring copied) {
   int server_socket = connect_cb_sock();
+  if (server_socket < 0)
+    return;
   struct cb_request request;
   request.type = ADD_NEW;
   request.req_int = 0;
