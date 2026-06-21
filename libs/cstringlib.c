@@ -39,11 +39,16 @@ void cstr_insert(cstring *insert, cstring *in, int idx) {
 cstring cstr_cut(cstring *str, int start, int end) {
   cstring cstring_ret = CSTRING_INIT;
   if (start > end) {
-    int x = start; start = end; end = x;
+    int x = start;
+    start = end;
+    end = x;
   }
-  if (start < 0) start = 0;
-  if (end > (int)str->len) end = str->len;
-  if (end < start) end = start;
+  if (start < 0)
+    start = 0;
+  if (end > (int)str->len)
+    end = str->len;
+  if (end < start)
+    end = start;
   cstring_ret.len = end - start;
   if (cstring_ret.len > 0) {
     cstring_ret.str = malloc(cstring_ret.len + 1);
@@ -53,7 +58,8 @@ cstring cstr_cut(cstring *str, int start, int end) {
     memmove(str->str + start, str->str + end, str->len - end);
     str->len -= cstring_ret.len;
     char *newbuf = realloc(str->str, str->len);
-    if (newbuf || str->len == 0) str->str = newbuf;
+    if (newbuf || str->len == 0)
+      str->str = newbuf;
   }
   return cstring_ret;
 }
