@@ -9,6 +9,7 @@
 
 #define CK(k) ((k) & 0x1f)
 #define UCK(k) ((k) | 0x60)
+#define CTAB &(run_data.tabs[run_data.c_tab]);
 enum editor_mode {
   view,
   edit,
@@ -42,9 +43,11 @@ struct tab {
   int2 select_end;
   int start;
   cstring filename;
+  cstring raw_text;
   cstring_da lines;
   int2 mem_pos;
   int *line_scroll;
+  int selecting;
 };
 struct static_editor_config {
   char line_char;
@@ -118,6 +121,30 @@ void write_file() {
   int fd = open(path, O_WRONLY | O_TRUNC | O_CREAT, 0644);
   write(fd, full.str, full.len);
   close(fd);
+}
+void sync_raw() {
+  struct tab *ctab = CTAB;
+  cstring full = CSTRING_INIT;
+  for (int i = 0; i < ctab->lines.n; i++) {
+    ccstr_append(&full, &ctab->lines.strs[i]);
+    cchstr_append(&full, '\n');
+  }
+  cstr_free(&ctab->raw_text);
+  ctab->raw_text = full;
+}
+void sync_lines() {
+  cstring_da arr = CSTRING_DA_INIT;
+  cstring cur = CSTRING_INIT;
+  struct tab *ctab = CTAB;
+  for (int i = 0; i < ctab->raw_text.len; i++) {
+    if (ctab->raw_text.str[i] == '\n') {
+      csta_append(&arr, &cur);
+      cstr_free(&cur);
+      cur = CSTRING_INIT;
+    } else {
+      cchstr_append(&cur, ctab->raw_text.str[i]);
+    }
+  }
 }
 void clamp_cursor() {
   switch (run_data.mode) {
@@ -236,8 +263,7 @@ void place_char(char c) {
       cur_line->len = c_abcol;
     }
     csta_insert(&ctab->lines, &tail, c_abrow + 1);
-    ctab->line_scroll =
-        realloc(ctab->line_scroll, sizeof(int) * ctab->lines.n);
+    ctab->line_scroll = realloc(ctab->line_scroll, sizeof(int) * ctab->lines.n);
     memmove(ctab->line_scroll + c_abrow + 1, ctab->line_scroll + c_abrow,
             sizeof(int) * (ctab->lines.n - c_abrow - 1));
     ctab->line_scroll[c_abrow + 1] = 0;
@@ -252,7 +278,8 @@ void place_char(char c) {
       run_data.cpos.x--;
     } else if (c_abrow > 0) {
       int prev_len = ctab->lines.strs[c_abrow - 1].len;
-      cpstr_append(&ctab->lines.strs[c_abrow - 1], ctab->lines.strs[c_abrow].str,
+      cpstr_append(&ctab->lines.strs[c_abrow - 1],
+                   ctab->lines.strs[c_abrow].str,
                    ctab->lines.strs[c_abrow].len);
       cstr_free(&ctab->lines.strs[c_abrow]);
       csta_pop(&ctab->lines, c_abrow);
@@ -363,8 +390,8 @@ void draw_lines(cstring *ab, int *rows_left, int *row) {
           (*row)++;
         } else {
           cstring truncated = CSTRING_INIT;
-          getrange(&(ctab->lines.strs[lineidx]), av_cols, ctab->line_scroll[lineidx],
-                   &truncated);
+          getrange(&(ctab->lines.strs[lineidx]), av_cols,
+                   ctab->line_scroll[lineidx], &truncated);
           ccstr_append(&(ab[*row]), &idxstr);
           cchstr_append(&(ab[*row]), ' ');
           cchstr_append(&(ab[*row]), run_data.staticconf.line_char);
